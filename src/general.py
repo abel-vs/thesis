@@ -1,15 +1,16 @@
+import time
 import torch
 import importlib
 import inspect
 
 #Define the training function
-def train(model, device, train_loader, optimizer, epoch):
+def train(model, device, train_loader, criterion, optimizer, epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
-        loss = F.nll_loss(output, target)
+        loss = criterion(output, target)
         loss.backward()
         optimizer.step()
         if batch_idx % 100 == 0:
@@ -29,41 +30,57 @@ def test(model, device, test_loader, criterion):
     # Disable gradients (to save memory)
     with torch.no_grad():
         # Loop over batches of test data
-        for inputs, labels in iter(test_loader):
-            # Print number of inputs
-            print("Inputs: " + str(len(inputs)))
+        for batch_idx, (data, target) in enumerate(test_loader):
             # Move data to device
-            inputs, labels = inputs.to(device), labels.to(device)
+            data, target = data.to(device), target.to(device)
 
             # Forward pass
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            output = model(data)
+            loss = criterion(output, target)
 
             # Update test loss and accuracy
             test_loss += loss.item()
-            test_acc += (outputs.argmax(dim=1) == labels).float().mean()
+            test_acc += (outputs.argmax(dim=1) == target).float().mean()
 
     
     return test_loss, test_acc
 
 
 
+def test(model, device, test_loader, criterion, quantize=False, fbgemm=False):
+    model.to(device)
+    model.eval()
+    
+    print(model)
+    test_loss = 0
+    correct = 0
 
-def load_model(model_state, model_class):
-    # Import the module class
-    module = importlib.import_module(model_class)
+    st = time.time()
 
-    # Get all classes in the module
-    classes = [
-        obj[1] for obj in inspect.getmembers(module, inspect.isclass)
-    ]
+    with torch.no_grad():
+        for data, target in test_loader:
+            # Move data to device
+            data, target = data.to(device), target.to(device)
 
-    # Import the classes that are Modules
-    for cls in classes:
-        if issubclass(cls, torch.nn.Module):
-            # Add the class to this package's variables
-            globals()[cls.__name__] = cls
+            # Forward pass
+            output = model(data)
+            loss = criterion(output, target)
 
-    model = torch.load(model_state, map_location=torch.device('cpu'))
+            # Update test loss
+            test_loss += loss.item()
 
-    return model
+            # Count 
+            pred = output.argmax(dim=1, keepdim=True) # get the index of the max log-probability
+            correct += pred.eq(target.view_as(pred)).sum().item()
+
+    et = time.time()
+
+    
+    test_loss /= len(test_loader.dataset)
+    
+    print("========================================= PERFORMANCE =============================================")
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        test_loss, correct, len(test_loader.dataset),
+        100. * correct / len(test_loader.dataset)))
+    print('Elapsed time = {:0.4f} milliseconds'.format((et - st) * 1000))
+    print("====================================================================================================")
