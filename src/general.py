@@ -3,84 +3,104 @@ import torch
 import importlib
 import inspect
 
-#Define the training function
+LOGGING_STEPS = 100
+
+# General train function
 def train(model, device, train_loader, criterion, optimizer, epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
+    st = time.time()
+
+    for batch_id, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
-        if batch_idx % 100 == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
-
-#Define the test function
-def test(model, device, test_loader, criterion):
-    # Set model to evaluation mode
-    model.eval()
-
-    # Initialize test loss and accuracy
-    test_loss = 0.0
-    test_acc = 0.0
-
-    # Disable gradients (to save memory)
-    with torch.no_grad():
-        # Loop over batches of test data
-        for batch_idx, (data, target) in enumerate(test_loader):
-            # Move data to device
-            data, target = data.to(device), target.to(device)
-
-            # Forward pass
-            output = model(data)
-            loss = criterion(output, target)
-
-            # Update test loss and accuracy
-            test_loss += loss.item()
-            test_acc += (outputs.argmax(dim=1) == target).float().mean()
-
+        if batch_id % LOGGING_STEPS == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\t Distillation Loss: {:.4f}'.format(
+                epoch, batch_id * len(data), len(train_loader.dataset),
+                100. * batch_id / len(train_loader), loss.item()))
+                
+    et = time.time()
+    duration = (et - st) * 1000
+    batch_duration = duration/len(train_loader)
     
-    return test_loss, test_acc
+    print_performance("Train Set", loss, duration, batch_duration)
 
 
-
-def test(model, device, test_loader, criterion, quantize=False, fbgemm=False):
-    model.to(device)
+# General test function
+def test(model, device, test_loader, criterion, epoch):
     model.eval()
-    
-    print(model)
     test_loss = 0
-    correct = 0
-
     st = time.time()
 
     with torch.no_grad():
-        for data, target in test_loader:
-            # Move data to device
+        for batch_id, (data, target) in enumerate(test_loader):
             data, target = data.to(device), target.to(device)
-
-            # Forward pass
             output = model(data)
             loss = criterion(output, target)
-
-            # Update test loss
             test_loss += loss.item()
-
-            # Count 
-            pred = output.argmax(dim=1, keepdim=True) # get the index of the max log-probability
-            correct += pred.eq(target.view_as(pred)).sum().item()
+            if batch_id % LOGGING_STEPS == 0 or (batch_id == len(test_loader) - 1):
+                print_progress("Test", epoch, batch_id, data, test_loader, loss)
 
     et = time.time()
+    duration = (et - st) * 1000
+    batch_duration = duration/len(test_loader)
+    test_loss /= len(test_loader)
 
-    
-    test_loss /= len(test_loader.dataset)
-    
+    print_performance("Test Set", test_loss, duration, batch_duration)
+
+
+# Method that prints the progress of the training/testing
+def print_progress(title, epoch, batch_id, data, data_loader, loss):
+    print('{} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                    title, epoch, batch_id * len(data), len(data_loader.dataset),
+                    100. * batch_id / len(data_loader), loss.item()))
+
+
+# Method that prints the average loss and the elapsed time
+def print_performance(title, loss, duration, batch_duration):
     print("========================================= PERFORMANCE =============================================")
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
-    print('Elapsed time = {:0.4f} milliseconds'.format((et - st) * 1000))
+    print('{}: Average loss: {:.4f}'.format(title, loss))
+    print('Elapsed time = {:.2f} milliseconds ({:.2f} per batch)'.format(duration, batch_duration))
     print("====================================================================================================")
+
+
+# Method that imports the classes from a module to the globals dictionary of a process
+def import_module_classes(module, globals):
+    # Get all classes in the module
+    classes = [
+        obj[1] for obj in inspect.getmembers(module, inspect.isclass)
+    ]
+
+    # Import the classes that are Modules
+    for cls in classes:
+        if issubclass(cls, torch.nn.Module):
+            # Add the class to this package's variables
+            globals()[cls.__name__] = cls
+
+
+def get_module_classes(module):
+    # Get all classes in the module
+    classes = [
+        obj[1] for obj in inspect.getmembers(module, inspect.isclass)
+    ]
+
+    # Only retain classes that are Modules
+    for cls in classes:
+        if not issubclass(cls, torch.nn.Module):
+            classes.remove(cls)
+
+    return classes
+
+
+def get_device(no_cuda = False):
+    use_cuda = not no_cuda and torch.cuda.is_available()
+    print(f"Using cuda: {use_cuda}")
+
+    return torch.device("cuda" if use_cuda else "cpu")
+
+def save_model(model, path):
+    torch.save(model.state_dict(), path)
+

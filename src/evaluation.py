@@ -10,26 +10,32 @@ def get_model_size(model):
     os.remove("tmp.pt")
     return round(model_size, 2)
 
+
 # Method that returns the number of parameters in the model
 def get_model_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 
 # Method that returns the model siz in RAM in MB
 def get_model_ram(model):
     return sum(p.numel() * p.element_size() for p in model.parameters() if p.requires_grad) / (1024*1024)
 
+
 # Method that returns the number of FLOPS the model executes
 def get_model_flops(model, input_size):
     return flopth(model, input_size)
+
 
 # Method that returns the number of pruned parameters in the model
 def get_model_pruned_parameters(model):
     # For each parameter check whether its value is zero
     return sum(p.numel() for p in model.parameters() if p.requires_grad and p.eq(0).all())
 
+
 # Method that returns the sparsity of a module
 def get_module_sparsity(module):
     100. * float(torch.sum(module.weight == 0)) / float(module.weight.nelement())
+
 
 # Method that 
 def time_model_evaluation(model, configs, tokenizer):
