@@ -5,23 +5,26 @@ import src.metrics as metrics
 HEADER_LENGTH = 80
 
 # Method that prints the progress of the training/testing
-def print_progress(title, epoch, batch_id, data, data_loader, loss, score=None):
-    tqdm.write('{} Epoch: {} [{}/{} ({:.0f}%)]\t Loss: {:.6f} {}'.format(
-        title, epoch, batch_id * len(data), len(data_loader.dataset),
+def print_progress(title, batch_id, data, data_loader, loss, score=None):
+    tqdm.write('{}: [{}/{} ({:.0f}%)]\t Loss: {:.6f} {}'.format(
+        title, batch_id * len(data), len(data_loader.dataset),
         100. * batch_id / len(data_loader), loss.item(),
         '\tScore: ' + str(score) if score is not None else ''))
 
 
 # Method that prints the average loss, optional metric score and the elapsed time
-def print_performance(title, loss, duration, batch_duration, metric=None, score=None):
+def print_performance(title, loss, duration, batch_duration, data_duration, metric=None, score=None):
     title = (" " + title + " PERFORMANCE ").upper()
     half_header = int((HEADER_LENGTH - len(title))/2)
     print("="*half_header + title + "="*half_header)
     print('Average loss = {:.4f}'.format(loss))
     if metric is not None:
-        print('{} = {:.4f}'.format(metrics.NAMES[metric], score))
-    print('Elapsed time = {:.2f} milliseconds ({:.2f} per batch)'.format(
-        duration, batch_duration))
+        if metric in metrics.NAMES.keys():
+            print('{} = {:.4f}'.format(metrics.NAMES[metric], score))
+        else:
+            print('Metric = {:.4f}'.format(score))
+    print('Elapsed time = {:.2f} milliseconds ({:.2f} per batch, {:.2f} per data point)'.format(
+        duration, batch_duration, data_duration))
     print("="*HEADER_LENGTH)
 
 

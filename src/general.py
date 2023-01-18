@@ -11,11 +11,11 @@ LOGGING_STEPS = 1000
 # General train function
 
 
-def train(model, device, train_loader, criterion, optimizer, epoch, metric=None):
+def train(model, device, train_loader, criterion, optimizer, metric=None):
     model.train()
     st = time.time()
 
-    for batch_id, (data, target) in enumerate(tqdm(train_loader), desc='Train'):
+    for batch_id, (data, target) in enumerate(tqdm(train_loader, desc='Train')):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -27,18 +27,20 @@ def train(model, device, train_loader, criterion, optimizer, epoch, metric=None)
             score = metric(output, target)
 
         if batch_id % LOGGING_STEPS == 0 and batch_id > 0:
-            plot.print_progress("Train", epoch, batch_id, data, train_loader, loss.item(),
-                           score if metric is not None else None)
+            plot.print_progress("Train", batch_id, data, train_loader, loss.item(),
+                                score if metric is not None else None)
 
     et = time.time()
     duration = (et - st) * 1000
     batch_duration = duration/len(train_loader)
+    data_duration = batch_duration/data.shape[0]
 
-    plot.print_performance("Train Set", loss, duration, batch_duration)
+    plot.print_performance("Train", loss, duration,
+                           batch_duration, data_duration)
 
 
 # General test function
-def test(model, device, test_loader, criterion, epoch, metric=None):
+def test(model, device, test_loader, criterion, metric=None):
     model.eval()
     test_loss = 0
     test_score = 0
@@ -56,18 +58,20 @@ def test(model, device, test_loader, criterion, epoch, metric=None):
                 test_score += score
 
             if batch_id % LOGGING_STEPS == 0 and batch_id > 0:
-                plot.print_progress("Test", epoch, batch_id, data, test_loader, loss,
-                               score if metric is not None else None)
+                plot.print_progress("Test", 1, batch_id, data, test_loader, loss,
+                                    score if metric is not None else None)
 
     et = time.time()
     duration = (et - st) * 1000
     batch_duration = duration/len(test_loader)
+    data_duration = batch_duration/data.shape[0]
     test_loss /= len(test_loader)
     test_score /= len(test_loader)
 
-    plot.print_performance("Test Set", test_loss, duration,
-                      batch_duration, metric, test_score)
+    plot.print_performance("Test", test_loss, duration,
+                           batch_duration, data_duration, metric, test_score)
 
+    return test_loss, test_score, duration, batch_duration, data_duration
 
 
 # Method that imports the classes from a module to the globals dictionary of a process
