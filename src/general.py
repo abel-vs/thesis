@@ -2,69 +2,72 @@ import time
 import torch
 import importlib
 import inspect
+from tqdm import tqdm
+import src.metrics as metrics
+import src.plot as plot
 
-LOGGING_STEPS = 100
+LOGGING_STEPS = 1000
 
 # General train function
-def train(model, device, train_loader, criterion, optimizer, epoch):
+
+
+def train(model, device, train_loader, criterion, optimizer, epoch, metric=None):
     model.train()
     st = time.time()
 
-    for batch_id, (data, target) in enumerate(train_loader):
+    for batch_id, (data, target) in enumerate(tqdm(train_loader), desc='Train'):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
-        if batch_id % LOGGING_STEPS == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\t Distillation Loss: {:.4f}'.format(
-                epoch, batch_id * len(data), len(train_loader.dataset),
-                100. * batch_id / len(train_loader), loss.item()))
-                
+
+        if metric is not None:
+            score = metric(output, target)
+
+        if batch_id % LOGGING_STEPS == 0 and batch_id > 0:
+            plot.print_progress("Train", epoch, batch_id, data, train_loader, loss.item(),
+                           score if metric is not None else None)
+
     et = time.time()
     duration = (et - st) * 1000
     batch_duration = duration/len(train_loader)
-    
-    print_performance("Train Set", loss, duration, batch_duration)
+
+    plot.print_performance("Train Set", loss, duration, batch_duration)
 
 
 # General test function
-def test(model, device, test_loader, criterion, epoch):
+def test(model, device, test_loader, criterion, epoch, metric=None):
     model.eval()
     test_loss = 0
+    test_score = 0
     st = time.time()
 
     with torch.no_grad():
-        for batch_id, (data, target) in enumerate(test_loader):
+        for batch_id, (data, target) in enumerate(tqdm(test_loader, desc='Test')):
             data, target = data.to(device), target.to(device)
             output = model(data)
             loss = criterion(output, target)
             test_loss += loss.item()
-            if batch_id % LOGGING_STEPS == 0 or (batch_id == len(test_loader) - 1):
-                print_progress("Test", epoch, batch_id, data, test_loader, loss)
+
+            if metric is not None:
+                score = metric(output, target)
+                test_score += score
+
+            if batch_id % LOGGING_STEPS == 0 and batch_id > 0:
+                plot.print_progress("Test", epoch, batch_id, data, test_loader, loss,
+                               score if metric is not None else None)
 
     et = time.time()
     duration = (et - st) * 1000
     batch_duration = duration/len(test_loader)
     test_loss /= len(test_loader)
+    test_score /= len(test_loader)
 
-    print_performance("Test Set", test_loss, duration, batch_duration)
+    plot.print_performance("Test Set", test_loss, duration,
+                      batch_duration, metric, test_score)
 
-
-# Method that prints the progress of the training/testing
-def print_progress(title, epoch, batch_id, data, data_loader, loss):
-    print('{} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                    title, epoch, batch_id * len(data), len(data_loader.dataset),
-                    100. * batch_id / len(data_loader), loss.item()))
-
-
-# Method that prints the average loss and the elapsed time
-def print_performance(title, loss, duration, batch_duration):
-    print("========================================= PERFORMANCE =============================================")
-    print('{}: Average loss: {:.4f}'.format(title, loss))
-    print('Elapsed time = {:.2f} milliseconds ({:.2f} per batch)'.format(duration, batch_duration))
-    print("====================================================================================================")
 
 
 # Method that imports the classes from a module to the globals dictionary of a process
@@ -95,12 +98,12 @@ def get_module_classes(module):
     return classes
 
 
-def get_device(no_cuda = False):
+def get_device(no_cuda=False):
     use_cuda = not no_cuda and torch.cuda.is_available()
     print(f"Using cuda: {use_cuda}")
 
     return torch.device("cuda" if use_cuda else "cpu")
 
+
 def save_model(model, path):
     torch.save(model.state_dict(), path)
-

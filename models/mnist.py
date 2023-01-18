@@ -50,12 +50,13 @@ if __name__ == '__main__':
 class MnistSmallLinear(nn.Module):
     def __init__(self):
         super(MnistSmallLinear, self).__init__()
-        self.linear_1 = nn.Linear(784, 50)
+        self.linear_1 = nn.Linear(784, 50) 
         self.relu = nn.ReLU()
         self.linear_2 = nn.Linear(50, 10)
 
     def forward(self, input):
-        scores = self.linear_1(input)
+        scores = input.view(input.size(0), -1)
+        scores = self.linear_1(scores)
         scores = self.relu(scores)
         scores = self.linear_2(scores)
         return scores
