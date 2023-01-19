@@ -14,17 +14,21 @@ LOGGING_STEPS = 1000
 def train(model, device, train_loader, criterion, optimizer, metric=None):
     model.train()
     st = time.time()
+    train_loss = 0
+    train_score = 0
 
     for batch_id, (data, target) in enumerate(tqdm(train_loader, desc='Train')):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
+        train_loss += loss.item()
         loss.backward()
         optimizer.step()
 
         if metric is not None:
             score = metric(output, target)
+            train_score += score
 
         if batch_id % LOGGING_STEPS == 0 and batch_id > 0:
             plot.print_progress("Train", batch_id, data, train_loader, loss.item(),
@@ -34,9 +38,11 @@ def train(model, device, train_loader, criterion, optimizer, metric=None):
     duration = (et - st) * 1000
     batch_duration = duration/len(train_loader)
     data_duration = batch_duration/data.shape[0]
+    train_loss /= len(train_loader)
+    train_score /= len(train_loader)
 
-    plot.print_performance("Train", loss, duration,
-                           batch_duration, data_duration)
+    plot.print_performance("Train", train_loss, duration,
+                           batch_duration, data_duration,  metric, train_score)
 
 
 # General test function

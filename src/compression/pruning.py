@@ -18,11 +18,11 @@ def get_parameters_to_prune(model, pruning_rate):
     return parameters_to_prune[:int(len(parameters_to_prune) * pruning_rate)]
 
 
-# Method that randomly prunes a module
+# Method that randomly prunes a module by a given rate from 0% to 100%
 def random_pruning(module, rate):
     prune.random_unstructured(module, name="weight", amount=rate)
 
-# Method that prunes the lowest magnitude weights of a module
+# Method that prunes the lowest magnitude weights of a module 
 def magnitude_pruning(module, rate):
     prune.l1_unstructured(module, name="weight", amount=rate)
 

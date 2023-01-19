@@ -3,3 +3,9 @@ __pycache__/
 
 data/
 
+
+src/.DS_Store
+
+.DS_Store
+
+examples/playground.ipynb
