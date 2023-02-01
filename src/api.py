@@ -26,17 +26,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-class CompressionMethod(str, Enum):
-    pruning = "pruning"
-    quantization = "quantization"
-    distillation = "distillation"
-
 class AnalysisModel(BaseModel):
-    compression_goal: str = "model_size"    # Goal of the compression (model_size, inference_time, energy_usage).
-    compression_target: float = 0.5         # Target value that the model should achieve after compression, as percentage of the original value.
-    performance_metric: str = "accuracy"    # Metric used to measure the performance of the model.
-    performance_target: float = 0.9         # Target value that the model should achieve after compression.
+    compression_goal: str   # Goal of the compression (model_size, inference_time, energy_usage).
+    compression_target: float       # Target value that the model should achieve after compression, as percentage of the original value.
+    performance_metric: str    # Metric used to measure the performance of the model.
+    performance_target: float       # Target value that the model should achieve after compression.
 
 class Compression(BaseModel):
     type: str = "pruning"                   # Type of compression
@@ -66,7 +60,7 @@ def analyze(settings: AnalysisModel = Depends(), model_state: UploadFile = File(
         settings.performance_metric, 
         settings.performance_target) 
 
-    return {"suggested_compression_actions": compression_actions, "settings": settings}
+    return {"compression_actions": compression_actions, "settings": settings}
 
 
 def main(host, port):
