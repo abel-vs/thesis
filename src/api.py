@@ -52,16 +52,12 @@ class Compression(BaseModel):
 
 @app.get("/")
 async def home():
-    return {"message": "Hello"}
+    return {"message": "Wow it works!"}
 
 
 # Analze the given model and return suggested compression actions
 @app.post("/analyze")
-def analyze(settings: AnalysisModel = Depends(), files: List[UploadFile] = File(...)):
-    model_state = files[0].file
-    model_architecture = files[1].file
-
-    # compression_actions = []
+def analyze(settings: AnalysisModel = Depends(), model_state: UploadFile = File(...), model_architecture: UploadFile = File(...)):
     compression_actions = analysis.analyze(
         model_state, 
         model_architecture, 
