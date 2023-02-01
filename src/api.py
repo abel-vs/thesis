@@ -2,11 +2,29 @@
 from enum import Enum
 from typing import List, Union
 from fastapi import Depends, FastAPI, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import analysis
 from pydantic import BaseModel
 
+
+HOST = "127.0.0.1"
+PORT = 8000
+
 app = FastAPI()
+
+origins = [
+    "http://" + HOST + ":" + str(PORT),
+    "http://localhost:3000"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class CompressionMethod(str, Enum):
@@ -31,9 +49,11 @@ class Compression(BaseModel):
 # PUT = Update
 # DELETE = Delete
 
+
 @app.get("/")
 async def home():
     return {"message": "Hello"}
+
 
 # Analze the given model and return suggested compression actions
 @app.post("/analyze")
@@ -50,8 +70,12 @@ def analyze(settings: AnalysisModel = Depends(), files: List[UploadFile] = File(
         settings.performance_metric, 
         settings.performance_target) 
 
-    return {"suggested_compression_actions": compression_actions}
+    return {"suggested_compression_actions": compression_actions, "settings": settings}
+
+
+def main(host, port):
+    uvicorn.run("api:app", host=host, port=port, reload=True)
 
 # Run the file to start the api server
 if __name__ == "__main__":
-    uvicorn.run("api:app", host="127.0.0.1", port=8000, reload=True)
+    main(HOST, PORT)
