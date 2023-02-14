@@ -1,11 +1,12 @@
 # Bring in lightweight dependencies
 from enum import Enum
 from typing import List, Union
-from fastapi import Depends, FastAPI, File, UploadFile
+from fastapi import Depends, FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import analysis
 from pydantic import BaseModel
+import json
 
 
 HOST = "127.0.0.1"
@@ -32,16 +33,48 @@ class AnalysisModel(BaseModel):
     performance_metric: str    # Metric used to measure the performance of the model.
     performance_target: float       # Target value that the model should achieve after compression.
 
-class Compression(BaseModel):
-    type: str = "pruning"                   # Type of compression
-    name: float = 0.5                       # Target value that the model should achieve after compression, as percentage of the original value.
-    performance_metric: str = "accuracy"    # Metric used to measure the performance of the model.
-    performance_target: float = 0.9         # Target value that the model should achieve after compression.
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate_to_json
 
-# GET = Read
-# POST = Create
-# PUT = Update
-# DELETE = Delete
+    @classmethod
+    def validate_to_json(cls, value):
+        if isinstance(value, str):
+            print("String:", value)
+            return cls(**json.loads(value))
+        else:
+            print("Object:", value.keys())
+            return value
+
+class CompressionModel(BaseModel):
+    type: str                # Type of compression
+    name: str                      # Target value that the model should achieve after compression, as percentage of the original value.
+    # target: float = 69         # Target value that the model should achieve after compression.
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate_to_json
+
+    @classmethod
+    def validate_to_json(cls, value):
+        if isinstance(value, str):
+            return cls(**json.loads(value))
+        return value
+
+
+class CompressionList(BaseModel):
+    '''Passing list of compression actions directly to API is not possible, therefore this model'''
+    actions: List[CompressionModel]
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate_to_json
+
+    @classmethod
+    def validate_to_json(cls, value):
+        if isinstance(value, str):
+            return cls(**json.loads(value))
+        return value
 
 
 @app.get("/")
@@ -51,7 +84,8 @@ async def home():
 
 # Analze the given model and return suggested compression actions
 @app.post("/analyze")
-def analyze(settings: AnalysisModel = Depends(), model_state: UploadFile = File(...), model_architecture: UploadFile = File(...)):
+def analyze(settings: AnalysisModel = Form(...), model_state: UploadFile = File(...), model_architecture: UploadFile = File(...)):
+    print("Settings", settings)
     compression_actions = analysis.analyze(
         model_state, 
         model_architecture, 
@@ -61,6 +95,16 @@ def analyze(settings: AnalysisModel = Depends(), model_state: UploadFile = File(
         settings.performance_target) 
 
     return {"compression_actions": compression_actions, "settings": settings}
+
+
+# Analze the given model and return suggested compression actions
+@app.post("/compress")
+def compress(
+    compression_actions: CompressionList = Form(...), 
+    model_state: UploadFile = File(...), 
+    model_architecture: UploadFile = File(...)):
+
+    return {"compression_actions": compression_actions.actions}
 
 
 def main(host, port):
