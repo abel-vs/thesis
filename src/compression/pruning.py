@@ -35,6 +35,17 @@ def magnitude_pruning_global(model, pruning_rate):
         amount=pruning_rate,
     )
 
+
+from torchpruner.attributions import RandomAttributionMetric  # or any of the methods above
+
+def get_attribution_scores(model, data_loader, criterion, device):
+    attr = RandomAttributionMetric(model, data_loader, criterion, device)
+    for module in model.children():
+        if len(list(module.children())) == 0:  # leaf module
+            scores = attr.run(module)
+            print (scores)
+
+
 # TODO: Define a custom pruning method that 
 # Below is an example of a custom pruning method
 class CustomMethod(prune.BasePruningMethod):

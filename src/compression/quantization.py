@@ -1,5 +1,5 @@
 import torch
-import src.general as general
+import general
 
 # Method that performs static quantization on a model
 def static_quantization(model, device, data_loader, backend="qnnpack"):
@@ -17,11 +17,12 @@ def static_quantization(model, device, data_loader, backend="qnnpack"):
 
     # Calibrate with the training set
     general.test(model, device, data_loader, torch.nn.CrossEntropyLoss())
-    print('Static Quantization: Calibration done')   
+    print("Static Quantization: Calibration done")
 
     quantized_model = torch.quantization.convert(quantized_model, inplace=False)
-    
+
     return quantized_model
+
 
 # Method that performs dynamic quantization on a model
 def dynamic_quantization(model, backend="qnnpack"):
@@ -29,13 +30,15 @@ def dynamic_quantization(model, backend="qnnpack"):
     quantized_model = torch.quantization.quantize_dynamic(model, dtype=torch.qint8)
     return quantized_model
 
+
 # TODO: Intelligently return a list of modules to fuse
-# Model Fusion combines multiple sequential modules (eg: [Conv2d, BatchNorm, ReLU]) into one. 
+# Model Fusion combines multiple sequential modules (eg: [Conv2d, BatchNorm, ReLU]) into one.
 def find_modules_to_fuse(model):
     modules_to_fuse = []
     for name, module in model.named_modules():
         pass
     return modules_to_fuse
+
 
 # # Fuse Conv+BN and Conv+BN+Relu modules prior to quantization
 # # This operation does not change the numerics

@@ -1,6 +1,6 @@
 import torch
 
-from models import CompressionAction, CompressionType
+from compression_models import CompressionAction, CompressionType
 
 PRUNE_PERCENTAGE = 0.5
 
@@ -12,8 +12,10 @@ def get_modules(model):
             modules.append(module)
     return modules
 
+
 def get_module_type(module):
     return type(module).__name__
+
 
 def get_model_types(model):
     modules = get_modules(model)
@@ -21,6 +23,7 @@ def get_model_types(model):
     for module in modules:
         types.append(get_module_type(module))
     return types
+
 
 def get_conv_layers(model):
     modules = get_modules(model)
@@ -58,11 +61,27 @@ def rank_filters(model, data_loader, device):
 
     return model
 
-def analyze(model_state, model_architecture, compression_goal, compression_target, performance_metric, perfomance_target):
-    """ Method that analyzes the given model and returns suggested compression actions. """
+
+def analyze(
+    model_state,
+    model_architecture,
+    compression_goal,
+    compression_target,
+    performance_metric,
+    perfomance_target,
+):
+    """Method that analyzes the given model and returns suggested compression actions."""
     compression_actions = []
     # TODO: Implement the analyze method
-    compression_actions.append(CompressionAction(type=CompressionType.pruning, name="Magnitude Pruning"))
-    compression_actions.append(CompressionAction(type=CompressionType.quantization, name="INT-8 Static Quantization"))
-    compression_actions.append(CompressionAction(type=CompressionType.distillation, name="Logits Distillation"))
+    compression_actions.append(
+        CompressionAction(type=CompressionType.pruning, name="Magnitude Pruning")
+    )
+    compression_actions.append(
+        CompressionAction(
+            type=CompressionType.quantization, name="INT-8 Static Quantization"
+        )
+    )
+    compression_actions.append(
+        CompressionAction(type=CompressionType.distillation, name="Logits Distillation")
+    )
     return compression_actions
