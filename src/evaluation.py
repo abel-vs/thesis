@@ -27,6 +27,8 @@ def get_model_parameters(model):
 def get_model_flops(model, input_size):
     model_copy = copy.deepcopy(model)
 
+    flops, params = flopth(model_copy, input_size, bare_number=True, show_detail=False)
+
     return flops
 
 
@@ -48,25 +50,17 @@ def get_module_sparsity(module):
     100.0 * float(torch.sum(module.weight == 0)) / float(module.weight.nelement())
 
 
-# Method that
-def time_model_evaluation(model, configs, tokenizer):
-    eval_start_time = time.time()
-    # evaluate(configs, model, tokenizer, prefix="")
-    eval_end_time = time.time()
-    eval_duration_time = eval_end_time - eval_start_time
-    print("Evaluate total time (seconds): {0:.1f}".format(eval_duration_time))
-    return eval_duration_time
-
-
-def get_metrics(model, test_loader):
+def test_and_get_metrics(
+    model, test_loader, criterion=F.nll_loss, metric=metrics.accuracy
+):
 
     device = general.get_device()
     input_batch = next(iter(test_loader))
-    example_input = input_batch[0][0]
+    example_input = input_batch[0]
     batch_size = input_batch[0].shape[0]
 
     loss, score, duration, batch_duration, data_duration = general.test(
-        model, device, test_loader, criterion=F.nll_loss, metric=metrics.accuracy
+        model, device, test_loader, criterion, metric
     )
 
     evaluation_metrics = {
@@ -78,13 +72,20 @@ def get_metrics(model, test_loader):
         "data_duration": data_duration,
         "batch_size": batch_size,
         "example_input": example_input,  # Currently error with flops calculation
+        "input_size": example_input[0].size(),
     }
 
     return evaluation_metrics
 
 
-def get_results(model, test_loader):
-    metrics = get_metrics(model, test_loader)
+def get_results(model, test_loader, criterion=F.nll_loss, metric=metrics.accuracy):
+    metrics = test_and_get_metrics(model, test_loader, criterion, metric)
+
+    flops = -1
+    try:
+        flops = get_model_flops(model, metrics["input_size"])
+    except:
+        print("Could not calculate FLOPS")
 
     results = {
         "loss": metrics["loss"],
@@ -93,7 +94,7 @@ def get_results(model, test_loader):
         "data_duration": metrics["data_duration"],
         "model_size": get_model_size(model),
         "params": get_model_parameters(model),
-        # "flops": get_model_flops(model, metrics["example_input"].size()),
+        "flops": flops,
         "macs": get_MACS(model, metrics["example_input"]),
     }
 

@@ -162,10 +162,19 @@ def compress_model(model, compression_actions):
 
     # Compress the model
     compressed_model = model
+    print(compression_actions)
+    sorted(compression_actions, key=lambda x: x["type"])
+    print(compression_actions)
     for action in compression_actions:
         print(action)
         if action["type"] == "distillation":
-            print("DISTILLATION STARTED")
+            plot.print_header("DISTILLATION STARTED")
             compressed_model = distil.example_distil_loop(compressed_model)
+        if action["type"] == "quantization":
+            plot.print_header("QUANTIZATION STARTED")
+            compressed_model = quant.dynamic_quantization(compressed_model)
+        if action["type"] == "pruning":
+            plot.print_header("PRUNING STARTED")
+            pass
 
     return compressed_model

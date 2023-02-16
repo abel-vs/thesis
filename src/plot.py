@@ -70,74 +70,69 @@ def plot_loss(loss, it, it_per_epoch, smooth_loss=[], base_name="", title=""):
 
 
 # Method that prints the metrics if they are given
-def print_metrics(**kwargs):
-    print_header(title="METRICS")
+def print_results(**kwargs):
+    print_header(title="RESULTS")
     if "loss" in kwargs:
-        print("Loss: {:.6f}".format(kwargs.get("loss")))
+        print("Loss: {:.6f}".format(kwargs["loss"]))
     if "score" in kwargs:
-        print("Score: {:.6f}".format(kwargs.get("score")))
+        print("Score: {:.6f}".format(kwargs["score"]))
     if "batch_duration" in kwargs and "batch_size" in kwargs:
         print(
             "Time per batch: {:.4f} ms ({} per batch)".format(
-                kwargs.get("batch_duration"), kwargs.get("batch_size")
+                kwargs["batch_duration"], kwargs["batch_size"]
             )
         )
     if "data_duration" in kwargs:
-        print("Time per data point: {:.4f} ms".format(kwargs.get("data_duration")))
-    if "model" in kwargs:
-        model_size = eval.get_model_size(kwargs.get("model"))
-        print("Model Size: {} MB".format(model_size))
-        params = eval.get_model_parameters(kwargs.get("model"))
-        print("Number of parameters: {}".format(params))
-        if "example_input" in kwargs:
-            model_flops, params = eval.get_model_flops(
-                kwargs.get("model"), kwargs.get("example_input").size()
-            )
-            print("Number of FLOPS: {0}".format(model_flops))
+        print("Time per data point: {:.4f} ms".format(kwargs["data_duration"]))
+    if "model_size" in kwargs:
+        print("Model Size: {} MB".format(kwargs["model_size"]))
+    if "params" in kwargs:
+        print("Number of parameters: {}".format(kwargs["params"]))
+    if "flops" in kwargs:
+        print("Number of FLOPs: {0}".format(kwargs["flops"]))
+    if "macs" in kwargs:
+        print("Number of MACs: {0}".format(kwargs["macs"]))
     print_header()
 
 
 # Method that prints a comparison of metrics
-def print_before_after_metrics(before, after):
+def print_before_after_results(before, after):
     # Helper function to check whether variable is in both sets
     in_both = lambda x: x in before and x in after
-    print_header(title="METRICS BEFORE & AFTER")
+    print_header(title="RESULTS BEFORE & AFTER")
     if in_both("loss"):
-        print("Loss: {:.6f} -> {:.6f}".format(before.get("loss"), after.get("loss")))
+        print("Loss: {:.6f} -> {:.6f}".format(before["loss"], after["loss"]))
     if in_both("score"):
-        print(
-            "Score: {:.6f} -> {:.6f} ".format(before.get("score"), after.get("score"))
-        )
+        print("Score: {:.6f} -> {:.6f} ".format(before["score"], after["score"]))
     if in_both("batch_duration") and in_both("batch_size"):
-        assert before.get("batch_size") == after.get("batch_size")
+        assert before["batch_size"] == after["batch_size"]
         print(
             "Time per batch: {:.4f} ms -> {:.4f} ms ({} per batch)".format(
-                before.get("batch_duration"),
-                after.get("batch_duration"),
-                before.get("batch_size"),
+                before["batch_duration"],
+                after["batch_duration"],
+                before["batch_size"],
             )
         )
     if in_both("data_duration"):
         print(
             "Time per data point: {:.4f} ms -> {:.4f} ms".format(
-                before.get("data_duration"), after.get("data_duration")
+                before["data_duration"], after["data_duration"]
             )
         )
-    if in_both("model"):
-        before_model_size = eval.get_model_size(before.get("model"))
-        after_model_size = eval.get_model_size(after.get("model"))
-        print("Model Size: {} MB -> {} MB".format(before_model_size, after_model_size))
-        before_params = eval.get_model_parameters(before.get("model"))
-        after_params = eval.get_model_parameters(after.get("model"))
-        print("Number of parameters: {} -> {}".format(before_params, after_params))
-        if in_both("example_input"):
-            before_flops, _ = eval.get_model_flops(
-                before.get("model"), before.get("example_input").size()
+    if in_both("model_size"):
+        print(
+            "Model Size: {} MB -> {} MB".format(
+                before["model_size"], after["model_size"]
             )
-            after_flops, _ = eval.get_model_flops(
-                after.get("model"), after.get("example_input").size()
-            )
-            print("Number of FLOPS: {} -> {}".format(before_flops, after_flops))
+        )
+    if in_both("params"):
+        print(
+            "Number of parameters: {} -> {}".format(before["params"], after["params"])
+        )
+    if in_both("flops"):
+        print("Number of FLOPs: {} -> {}".format(before["flops"], after["flops"]))
+    if in_both("macs"):
+        print("Number of MACs: {} -> {}".format(before["macs"], after["macs"]))
     print_header()
 
 

@@ -73,12 +73,10 @@ def example_distil_loop(model):
 
     student_model = mnist.MnistSmallLinear()
 
-    epochs = 5
+    epochs = 10
     lr = 0.01
 
-    optimizer = optim.Adam(
-        student_model.parameters(), lr=lr
-    )  # Important: use the student model parameters
+    optimizer = optim.Adam(student_model.parameters(), lr=lr)
     distil_criterion = F.mse_loss
     eval_criterion = F.cross_entropy
 

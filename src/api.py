@@ -1,5 +1,6 @@
 # Bring in lightweight dependencies
 from enum import Enum
+import os
 from typing import List, Union
 from fastapi import Depends, FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -135,9 +136,15 @@ def compress(
     original_results = eval.get_results(model, mnist.test_loader)
     compressed_results = eval.get_results(compressed_model, mnist.test_loader)
 
+    # Save the compressed model into a temporary file
+    compressed_model_file = NamedTemporaryFile(suffix=".pth", delete=False)
+    # compressed_model_file.name = "compressed_model.pth"
+    torch.save(model, compressed_model_file.name)
+
     return {
         "original_results": original_results,
         "compressed_results": compressed_results,
+        "compressed_model": compressed_model_file,
     }
 
 
