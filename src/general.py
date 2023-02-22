@@ -10,6 +10,7 @@ import compression.quantization as quant
 import compression.pruning as prune
 import evaluation as eval
 import mnist
+import copy
 
 LOGGING_STEPS = 1000
 
@@ -161,12 +162,9 @@ def compress_model(model, compression_actions):
     """Main method for compressing a model via API"""
 
     # Compress the model
-    compressed_model = model
-    print(compression_actions)
-    sorted(compression_actions, key=lambda x: x["type"])
+    compressed_model = copy.deepcopy(model)
     print(compression_actions)
     for action in compression_actions:
-        print(action)
         if action["type"] == "distillation":
             plot.print_header("DISTILLATION STARTED")
             compressed_model = distil.example_distil_loop(compressed_model)
@@ -175,6 +173,6 @@ def compress_model(model, compression_actions):
             compressed_model = quant.dynamic_quantization(compressed_model)
         if action["type"] == "pruning":
             plot.print_header("PRUNING STARTED")
-            pass
+            compressed_model = prune.pruning_global(compressed_model, 0.5)
 
     return compressed_model
