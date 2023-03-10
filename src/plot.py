@@ -99,42 +99,56 @@ def print_results(**kwargs):
 def print_before_after_results(before, after):
     # Helper function to check whether variable is in both sets
     in_both = lambda x: x in before and x in after
+    reduction = lambda x: -1 * (1 - (after[x] / before[x])) * 100
     print_header(title="RESULTS BEFORE & AFTER")
     if in_both("loss"):
-        print("Loss: {:.6f} -> {:.6f}".format(before["loss"], after["loss"]))
+        print("Loss: {:.6f} -> {:.6f} ({:.2f}%)".format(before["loss"], after["loss"], reduction("loss")))
     if in_both("score"):
-        print("Score: {:.6f} -> {:.6f} ".format(before["score"], after["score"]))
+        print("Score: {:.6f} -> {:.6f} ({:.2f}%)".format(before["score"], after["score"], reduction("score")))
     if in_both("batch_duration") and in_both("batch_size"):
         assert before["batch_size"] == after["batch_size"]
         print(
-            "Time per batch: {:.4f} ms -> {:.4f} ms ({} per batch)".format(
+            "Time per batch: {:.4f} ms -> {:.4f} ms ({:.2f}%) ({} per batch)".format(
                 before["batch_duration"],
                 after["batch_duration"],
+                reduction("batch_duration"),
                 before["batch_size"],
             )
         )
     if in_both("data_duration"):
         print(
-            "Time per data point: {:.4f} ms -> {:.4f} ms".format(
-                before["data_duration"], after["data_duration"]
+            "Time per data point: {:.4f} ms -> {:.4f} ms ({:.2f}%)".format(
+                before["data_duration"], after["data_duration"], reduction("data_duration")
             )
         )
     if in_both("model_size"):
         print(
-            "Model Size: {} MB -> {} MB".format(
-                before["model_size"], after["model_size"]
-            )
-        )
+            "Model Size: {} MB -> {} MB ({:.2f}%)".format(
+                before["model_size"], after["model_size"], reduction("model_size")
+            ))
     if in_both("params"):
         print(
-            "Number of parameters: {} -> {}".format(before["params"], after["params"])
-        )
+            "Number of parameters: {} -> {} ({:.2f}%)".format(before["params"], after["params"], reduction("params")))
     if in_both("flops"):
-        print("Number of FLOPs: {} -> {}".format(before["flops"], after["flops"]))
+        print("Number of FLOPs: {} -> {} ({:.2f}%)".format(before["flops"], after["flops"], reduction("flops")))
     if in_both("macs"):
-        print("Number of MACs: {} -> {}".format(before["macs"], after["macs"]))
+        print("Number of MACs: {} -> {} ({:.2f}%)".format(before["macs"], after["macs"], reduction("macs")))
     print_header()
 
 
 def get_summary(model, example_input):
     summary(model, example_input.size())
+
+def plot_relation(data, title, x_label, y_label, base_name):
+    fig = plt.figure(figsize=(8, 4), dpi=100)
+    plt.plot(list(map(lambda x: x[x_label],data)), list(map(lambda y: y[y_label], data)), linestyle="", marker="o")
+    plt.title(title)
+    plt.ylabel(y_label)
+    plt.xlabel(x_label)
+    if base_name != "":
+        fig.savefig(base_name + ".png")
+        # pickle.dump([loss, smooth_loss, it], open(base_name + '-' + str(it) + '.p', 'wb'))
+        # print(it)
+    else:
+        plt.show()
+    # plt.close("all")

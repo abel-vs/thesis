@@ -1,8 +1,5 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.datasets as datasets
-import torchvision.transforms as transforms
 
 # Basic Mnist model existing of two convolutional layers and two fully connected layers.
 class MnistModel(nn.Module):
@@ -18,7 +15,7 @@ class MnistModel(nn.Module):
         x = F.max_pool2d(x, 2, 2) # [20, 24, 24] -> [20, 12, 12]
         x = F.relu(self.conv2(x)) # [20, 12, 12] -> [50, 8, 8]
         x = F.max_pool2d(x, 2, 2)  # [50, 8, 8] -> [50, 4, 4]
-        x = x.view(-1, 4*4*50) # [50, 4, 4] -> [50*4*4]
+        x = x.view(-1, 4*4*self.conv2.out_channels) # [50, 4, 4] print("Output:", model(example_inputs).shape)-> [50*4*4]
         x = F.relu(self.fc1(x)) # [50*4*4] -> [500]
         x = self.fc2(x) # [500] -> [10]
         return F.log_softmax(x, dim=1) # [10]
@@ -83,19 +80,3 @@ class MnistSmallLinear(nn.Module):
         scores = self.relu(scores)
         scores = self.linear_2(scores)
         return scores
-
-
-# DATASET
-
-batch_size = 64
-test_batch_size = 1000
-use_cuda = False
-
-kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-mnist_transform = transforms.ToTensor()
-train_loader = torch.utils.data.DataLoader(
-    datasets.MNIST('../data', train=True, download=True, transform=mnist_transform,),
-    batch_size=batch_size, shuffle=True, **kwargs)
-test_loader = torch.utils.data.DataLoader(
-    datasets.MNIST('../data', train=True, download=True, transform=mnist_transform,),
-    batch_size=test_batch_size, shuffle=True, **kwargs)

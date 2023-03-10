@@ -89,19 +89,15 @@ def get_results(model, test_loader, criterion=F.nll_loss, metric=metrics.accurac
 
     macs, params = count_ops_and_params(model, metrics["example_input"])
 
-    print("Params = ", params)
-    print("Params 2.0 = ", sum(p.numel() for p in model.parameters()))
-    print("Params 3.0 = ", get_model_parameters(model))
-
     results = {
         "loss": metrics["loss"],
         "score": metrics["score"],
         "batch_duration": metrics["batch_duration"],
         "data_duration": metrics["data_duration"],
         "model_size": get_model_size(model),
-        "params": params,
-        "flops": flops,
-        "macs": macs,
+        "params": round(params),
+        "flops": round(flops),
+        "macs": round(macs),
     }
 
     return results

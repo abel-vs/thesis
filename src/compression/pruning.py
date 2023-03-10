@@ -3,6 +3,9 @@ import torch.nn.utils.prune as prune
 
 import torch_pruning as tp
 
+
+""" UNSTRUCTURED PRUNING """
+
 # Method that returns the parameters to prune
 # TODO: This should be done intelligently, returning the parameters that are the least important
 # For now, we just return the parameters that are the smallest
@@ -51,36 +54,44 @@ def magnitude_pruning_global(model, pruning_rate):
     )
 
 
-from torchpruner.attributions import (
-    RandomAttributionMetric,
-)  # or any of the methods above
+""" STRUCTURED PRUNING """
 
 
-def get_attribution_scores(model, data_loader, criterion, device):
-    attr = RandomAttributionMetric(model, data_loader, criterion, device)
-    for module in model.children():
-        if len(list(module.children())) == 0:  # leaf module
-            scores = attr.run(module)
-            print(scores)
+# Method to get the layers that should be ignored.
+# For example the final classifying layer
+# TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
+def get_ignored_layers(model):
+    ignored_layers = []
+    for i, m in enumerate(model.modules()):
+        if i == len(list(model.modules())) -1:
+            ignored_layers.append(m) 
 
 
-def structured_pruning(model, example_inputs):
-    # 1. build dependency graph for resnet18
-    DG = tp.DependencyGraph()
-    DG.build_dependency(model, example_inputs=example_inputs)
+def magnitude_pruning(model, example_inputs):
+    # 0. importance criterion for parameter selections
+    imp = tp.importance.MagnitudeImportance(p=2, group_reduction='mean')
 
-    # 2. Specify the to-be-pruned channels. Here we prune those channels indexed by [2, 6, 9].
-    pruning_idxs = [2, 6, 9]
-    pruning_group = DG.get_pruning_group(
-        model.conv1, tp.prune_conv_out_channels, idxs=pruning_idxs
+    # 1. ignore some layers that should not be pruned, e.g., the final classifier layer.
+    ignored_layers = get_ignored_layers(model)
+
+            
+    # 2. Pruner initialization
+    iterative_steps = 5 # You can prune your model to the target sparsity iteratively.
+    pruner = tp.pruner.MagnitudePruner(
+        model, 
+        example_inputs, 
+        global_pruning=False, # If False, a uniform sparsity will be assigned to different layers.
+        importance=imp, # importance criterion for parameter selection
+        iterative_steps=iterative_steps, # the number of iterations to achieve target sparsity
+        ch_sparsity=0.5, # remove 50% channels
+        ignored_layers=ignored_layers,
     )
 
-    # 3. prune all grouped layer that is coupled with model.conv1 (included).
-    if DG.check_pruning_group(pruning_group):  # avoid full pruning, i.e., channels=0.
-        pruning_group.exec()
+    for i in range(iterative_steps):
+        # pruner.step will remove some channels from the model with least importance
+        pruner.step()
 
     return model
-
 
 # TODO: Define a custom pruning method that
 # Below is an example of a custom pruning method
@@ -93,19 +104,3 @@ class CustomMethod(prune.BasePruningMethod):
         mask = default_mask.clone()
         mask.view(-1)[::2] = 0
         return mask
-
-
-import mnist
-
-# Main method
-def main():
-    model = mnist.MnistModel()
-    model.eval()
-
-    model = structured_pruning(model, torch.randn(1, 1, 28, 28))
-
-    print(model)
-
-
-if __name__ == "__main__":
-    main()
