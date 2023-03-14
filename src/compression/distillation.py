@@ -65,7 +65,7 @@ def distillation_train_loop(
 # TODO This should be done intelligently, returning a model that is similar to the teacher model but smaller.
 # For now, we just return a model with the same architecture as the teacher model
 def create_student_model(teacher_model, dataset: DataSet):
-    prune.magnitude_pruning_structured(teacher_model, dataset, fineTune=False)
+    prune.magnitude_pruning_structured(teacher_model, dataset, sparsity=0.5, fineTune=False)
     return teacher_model
 
 
@@ -80,7 +80,7 @@ def perform_distillation(model, dataset: DataSet,  settings: dict = None):
 
     # TODO: Find intelligent way to set the following properties
     distil_criterion = F.mse_loss
-    epochs = 1
+    epochs = 5
     optimizer = optim.Adam(student_model.parameters(), lr=0.01)
 
 

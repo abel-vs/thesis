@@ -184,7 +184,7 @@ def compress_model(model, dataset, compression_actions, settings):
 
     # Compress the model
     compressed_model = copy.deepcopy(model)
-    print(compression_actions)
+    print("Compression Actions:", compression_actions)
     for action in compression_actions:
         if action["type"] == "distillation":
             plot.print_header("DISTILLATION STARTED")
@@ -194,6 +194,6 @@ def compress_model(model, dataset, compression_actions, settings):
             compressed_model = quant.dynamic_quantization(compressed_model)
         if action["type"] == "pruning":
             plot.print_header("PRUNING STARTED")
-            compressed_model = prune.magnitude_pruning_structured(compressed_model, 0.5)
+            compressed_model = prune.magnitude_pruning_structured(compressed_model, dataset, sparsity=0.5, fineTune=True)
 
     return compressed_model

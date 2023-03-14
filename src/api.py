@@ -137,6 +137,8 @@ def compress(
     # Compress the model
     compressed_model = general.compress_model(model, dataset, settings.actions, settings)
 
+    print("Compression Complete.")
+
     # Evaluate the compressed model
     original_results = eval.get_results(model, dataset)
     compressed_results = eval.get_results(compressed_model, dataset)

@@ -68,7 +68,7 @@ def get_ignored_layers(model):
     return ignored_layers
 
 
-def magnitude_pruning_structured(model, dataset: DataSet, fineTune=False):
+def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineTune=False):
     example_inputs = general.get_example_input(dataset.train_loader)
     device = general.get_device()
 
@@ -79,14 +79,14 @@ def magnitude_pruning_structured(model, dataset: DataSet, fineTune=False):
     ignored_layers = get_ignored_layers(model)
             
     # 2. Pruner initialization
-    iterative_steps = 5 # You can prune your model to the target sparsity iteratively.
+    iterative_steps = 3 # You can prune your model to the target sparsity iteratively.
     pruner = tp.pruner.MagnitudePruner(
         model, 
         example_inputs, 
         global_pruning=False, # If False, a uniform sparsity will be assigned to different layers.
         importance=imp, # importance criterion for parameter selection
         iterative_steps=iterative_steps, # the number of iterations to achieve target sparsity
-        ch_sparsity=0.5, # remove 50% channels
+        ch_sparsity=sparsity,
         ignored_layers=ignored_layers,
     )
 
