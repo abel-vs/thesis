@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import metrics
-import evaluation as eval
 from torchscan import summary
 
 HEADER_LENGTH = 80

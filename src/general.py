@@ -3,7 +3,6 @@ import torch
 import importlib
 import inspect
 from tqdm import tqdm
-import metrics
 import plot
 import compression.distillation as distil
 import compression.quantization as quant
@@ -11,13 +10,23 @@ import compression.pruning as prune
 import evaluation as eval
 import mnist
 import copy
+import torch.optim as optim
+
+from dataset_models import DataSet
+
 
 LOGGING_STEPS = 1000
 
 # General train function
+def train(model, device, dataset: DataSet, optimizer=None):
+    train_loader = dataset.train_loader
+    criterion = dataset.criterion
+    metric = dataset.metric
 
+    if optimizer == None:
+        # TODO: Build automated optimizer constructor
+        optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
 
-def train(model, device, train_loader, criterion, optimizer, metric=None):
     model.train()
     st = time.time()
     train_loss = 0
@@ -65,7 +74,12 @@ def train(model, device, train_loader, criterion, optimizer, metric=None):
 
 
 # General test function
-def test(model, device, test_loader, criterion, metric=None):
+def test(model, device, dataset):
+
+    test_loader = dataset.test_loader
+    criterion = dataset.criterion
+    metric = dataset.metric
+
     model.eval()
     test_loss = 0
     test_score = 0
@@ -99,6 +113,9 @@ def test(model, device, test_loader, criterion, metric=None):
     data_duration = batch_duration / data.shape[0]
     test_loss /= len(test_loader)
     test_score /= len(test_loader)
+
+    print("Test score: ", test_score)
+    print("Metric: ", metric)
 
     plot.print_performance(
         "Test", test_loss, duration, batch_duration, data_duration, metric, test_score
@@ -153,12 +170,16 @@ def get_device(no_cuda=False):
 
     return torch.device("cuda" if use_cuda else "cpu")
 
+def get_example_input(data_loader):
+    input_batch = next(iter(data_loader))
+    return input_batch[0]
+
 
 def save_model(model, path):
     torch.save(model.state_dict(), path)
 
 
-def compress_model(model, compression_actions):
+def compress_model(model, dataset, compression_actions, settings):
     """Main method for compressing a model via API"""
 
     # Compress the model
@@ -167,12 +188,12 @@ def compress_model(model, compression_actions):
     for action in compression_actions:
         if action["type"] == "distillation":
             plot.print_header("DISTILLATION STARTED")
-            compressed_model = distil.example_distil_loop(compressed_model)
+            compressed_model = distil.perform_distillation(compressed_model, dataset, settings)
         if action["type"] == "quantization":
             plot.print_header("QUANTIZATION STARTED")
             compressed_model = quant.dynamic_quantization(compressed_model)
         if action["type"] == "pruning":
             plot.print_header("PRUNING STARTED")
-            compressed_model = prune.pruning_global(compressed_model, 0.5)
+            compressed_model = prune.magnitude_pruning_structured(compressed_model, 0.5)
 
     return compressed_model

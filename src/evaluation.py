@@ -7,6 +7,7 @@ import general
 import metrics
 import torch.nn.functional as F
 from op_counter import count_ops_and_params
+from dataset_models import DataSet
 
 # Method that returns the model size in MB
 
@@ -50,18 +51,13 @@ def get_module_sparsity(module):
     100.0 * float(torch.sum(module.weight == 0)) / float(module.weight.nelement())
 
 
-def test_and_get_metrics(
-    model, test_loader, criterion=F.nll_loss, metric=metrics.accuracy
-):
+def test_and_get_metrics(model, dataset: DataSet):
 
     device = general.get_device()
-    input_batch = next(iter(test_loader))
-    example_input = input_batch[0]
-    batch_size = input_batch[0].shape[0]
+    example_input = general.get_example_input(dataset.test_loader)
+    batch_size = example_input.shape[0]
 
-    loss, score, duration, batch_duration, data_duration = general.test(
-        model, device, test_loader, criterion, metric
-    )
+    loss, score, duration, batch_duration, data_duration = general.test(model, device, dataset)
 
     evaluation_metrics = {
         "model": model,
@@ -78,8 +74,8 @@ def test_and_get_metrics(
     return evaluation_metrics
 
 
-def get_results(model, test_loader, criterion=F.nll_loss, metric=metrics.accuracy):
-    metrics = test_and_get_metrics(model, test_loader, criterion, metric)
+def get_results(model, dataset: DataSet):
+    metrics = test_and_get_metrics(model, dataset)
 
     flops = -1
     try:

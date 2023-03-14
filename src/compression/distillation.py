@@ -3,27 +3,27 @@ from tqdm import tqdm
 import mnist
 import torch.nn.functional as F
 import torch.optim as optim
+import compression.pruning as prune
+import general
+from dataset_models import DataSet
 
 LOGGING_STEPS = 1000
 
 # Method that trains the student model using distillation
-
-
 def distillation_train_loop(
     teacher,
     student,
     train_data,
     test_data,
     distil_criterion,
-    test_criterion,
+    eval_criterion,
+    eval_metric,
     optimizer,
     epochs,
 ):
     for epoch in range(epochs):
 
-        for batch_id, (data, hard_target) in enumerate(
-            tqdm(train_data, desc="Distillation Training")
-        ):
+        for (data, hard_target) in tqdm(train_data, desc="Distillation Training"):
             # Compute the output logits of the teacher and student models
             soft_target = teacher(data)
             output = student(data)
@@ -40,24 +40,23 @@ def distillation_train_loop(
         # Validate the student model
         with torch.no_grad():
             test_loss = 0
-            correct = 0
-            total = 0
+            test_score = 0
+
             for data, hard_target in tqdm(test_data, desc="Distillation Validation"):
                 output = student(data)
 
-                loss = test_criterion(output, hard_target)
+                loss = eval_criterion(output, hard_target)
                 test_loss += loss.item()
 
-                _, predicted = output.max(1)
-                correct += (predicted == hard_target).sum().item()
-                total += hard_target.size(0)
+                score = eval_metric(output, hard_target)
+                test_score += score
 
-        test_acc = correct / total
         test_loss /= len(test_data)
+        test_score /= len(test_data)
 
         print("Epoch: {}".format(epoch))
         print("Distillation loss: {}".format(distill_loss.item()))
-        print("Test loss: {}, Test accuracy: {}".format(test_loss, test_acc))
+        print("Test loss: {}, Test score: {}".format(test_loss, test_score))
 
     return student
 
@@ -65,28 +64,34 @@ def distillation_train_loop(
 # Method that creates a student model based on the teacher model
 # TODO This should be done intelligently, returning a model that is similar to the teacher model but smaller.
 # For now, we just return a model with the same architecture as the teacher model
-def create_student_model(teacher_model):
+def create_student_model(teacher_model, dataset: DataSet):
+    prune.magnitude_pruning_structured(teacher_model, dataset, fineTune=False)
     return teacher_model
 
 
-def example_distil_loop(model):
+# Method that performs the whole distillation procedure
+def perform_distillation(model, dataset: DataSet,  settings: dict = None):
 
-    student_model = mnist.MnistSmallLinear()
+    # Create student model
+    student_model = create_student_model(model, dataset)
 
-    epochs = 10
-    lr = 0.01
+    eval_criterion = dataset.criterion
+    eval_metric = dataset.metric
 
-    optimizer = optim.Adam(student_model.parameters(), lr=lr)
+    # TODO: Find intelligent way to set the following properties
     distil_criterion = F.mse_loss
-    eval_criterion = F.cross_entropy
+    epochs = 1
+    optimizer = optim.Adam(student_model.parameters(), lr=0.01)
+
 
     compressed_model = distillation_train_loop(
         model,
         student_model,
-        mnist.train_loader,
-        mnist.test_loader,
+        dataset.train_loader,
+        dataset.test_loader,
         distil_criterion,
         eval_criterion,
+        eval_metric,
         optimizer,
         epochs,
     )

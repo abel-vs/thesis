@@ -1,13 +1,5 @@
 import torch
 
-
-# Currently just for classification like MNIST
-def accuracy(output, target):
-    pred = output.argmax(dim=1, keepdim=True)
-    correct = pred.eq(target.view_as(pred)).sum().item()
-    return correct / len(output)
-
-
 def mean_absolute_error(output, target):
     with torch.no_grad():
         return torch.mean(torch.abs(output - target))
@@ -18,7 +10,7 @@ def mean_squared_error(output, target):
         return torch.mean((output - target) ** 2)
 
 
-def accuracy_topk(output, target, topk=(1,)):
+def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
         maxk = max(topk)
@@ -32,7 +24,7 @@ def accuracy_topk(output, target, topk=(1,)):
         for k in topk:
             correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
-        return res
+        return res[0].item()
 
 
 NAMES = {

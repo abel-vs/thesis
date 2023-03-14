@@ -18,6 +18,7 @@ import mnist
 import torch.nn.functional as F
 import metrics
 import evaluation as eval
+from dataset_models import supported_datasets
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -55,10 +56,10 @@ class AnalysisModel(BaseModel):
             return value
 
 
-class CompressionModel(BaseModel):
-    type: str  # Type of compression
-    name: str  # Target value that the model should achieve after compression, as percentage of the original value.
-    # target: float = 69         # Target value that the model should achieve after compression.
+class CompressionActionModel(BaseModel):
+    type: str          # Type of compression
+    name: str          # TName of specific technique
+    settings: dict     # Extra settings dependent on the compression action
 
     @classmethod
     def __get_validators__(cls):
@@ -71,10 +72,12 @@ class CompressionModel(BaseModel):
         return value
 
 
-class CompressionList(BaseModel):
+class CompressModel(BaseModel):
     """Passing list of compression actions directly to API is not possible, therefore this model"""
 
-    actions: List[CompressionModel]
+    actions: List[CompressionActionModel]
+    dataset: str 
+
 
     @classmethod
     def __get_validators__(cls):
@@ -115,7 +118,7 @@ def analyze(
 # Analze the given model and return suggested compression actions
 @app.post("/compress")
 def compress(
-    compression_actions: CompressionList = Form(...),
+    settings: CompressModel = Form(...),
     model_state: UploadFile = File(...),
     model_architecture: UploadFile = File(...),
 ):
@@ -129,12 +132,14 @@ def compress(
 
     model = torch.load(model_state_file.name)
 
+    dataset = supported_datasets[settings.dataset]
+
     # Compress the model
-    compressed_model = general.compress_model(model, compression_actions.actions)
+    compressed_model = general.compress_model(model, dataset, settings.actions, settings)
 
     # Evaluate the compressed model
-    original_results = eval.get_results(model, mnist.test_loader)
-    compressed_results = eval.get_results(compressed_model, mnist.test_loader)
+    original_results = eval.get_results(model, dataset)
+    compressed_results = eval.get_results(compressed_model, dataset)
 
     # Save the compressed model into a temporary file
     compressed_model_file = NamedTemporaryFile(suffix=".pth", delete=False)
