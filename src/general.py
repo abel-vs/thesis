@@ -18,7 +18,8 @@ from dataset_models import DataSet
 LOGGING_STEPS = 1000
 
 # General train function
-def train(model, device, dataset: DataSet, optimizer=None):
+def train(model, dataset: DataSet, optimizer=None):
+    device = get_device()
     train_loader = dataset.train_loader
     criterion = dataset.criterion
     metric = dataset.metric
@@ -74,8 +75,8 @@ def train(model, device, dataset: DataSet, optimizer=None):
 
 
 # General test function
-def test(model, device, dataset):
-
+def test(model, dataset):
+    device = get_device()
     test_loader = dataset.test_loader
     criterion = dataset.criterion
     metric = dataset.metric
@@ -113,10 +114,7 @@ def test(model, device, dataset):
     data_duration = batch_duration / data.shape[0]
     test_loss /= len(test_loader)
     test_score /= len(test_loader)
-
-    print("Test score: ", test_score)
-    print("Metric: ", metric)
-
+    
     plot.print_performance(
         "Test", test_loss, duration, batch_duration, data_duration, metric, test_score
     )
@@ -188,12 +186,12 @@ def compress_model(model, dataset, compression_actions, settings):
     for action in compression_actions:
         if action["type"] == "distillation":
             plot.print_header("DISTILLATION STARTED")
-            compressed_model = distil.perform_distillation(compressed_model, dataset, settings)
+            compressed_model = distil.perform_distillation(compressed_model, dataset, action["settings"])
         if action["type"] == "quantization":
             plot.print_header("QUANTIZATION STARTED")
             compressed_model = quant.dynamic_quantization(compressed_model)
         if action["type"] == "pruning":
             plot.print_header("PRUNING STARTED")
-            compressed_model = prune.magnitude_pruning_structured(compressed_model, dataset, sparsity=0.5, fineTune=True)
+            compressed_model = prune.magnitude_pruning_structured(compressed_model, dataset, sparsity=0.5, fineTune=False)
 
     return compressed_model

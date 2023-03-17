@@ -2,7 +2,7 @@ import torch
 import general
 
 # Method that performs static quantization on a model
-def static_quantization(model, device, data_loader, backend="qnnpack"):
+def static_quantization(model, dataset, backend="qnnpack"):
     model.eval()
 
     modules_to_fuse = find_modules_to_fuse(model)
@@ -16,7 +16,7 @@ def static_quantization(model, device, data_loader, backend="qnnpack"):
     quantized_model = torch.quantization.prepare(model, inplace=False)
 
     # Calibrate with the training set
-    general.test(model, device, data_loader, torch.nn.CrossEntropyLoss())
+    general.test(model, dataset)
     print("Static Quantization: Calibration done")
 
     quantized_model = torch.quantization.convert(quantized_model, inplace=False)

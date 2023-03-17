@@ -70,7 +70,6 @@ def get_ignored_layers(model):
 
 def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineTune=False):
     example_inputs = general.get_example_input(dataset.train_loader)
-    device = general.get_device()
 
     # 0. importance criterion for parameter selections
     imp = tp.importance.MagnitudeImportance(p=2, group_reduction='mean')
@@ -94,6 +93,6 @@ def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineT
         # pruner.step will remove some channels from the model with least importance
         pruner.step()
         if fineTune:
-            general.train(model, device, dataset)
+            general.train(model, dataset)
 
     return model

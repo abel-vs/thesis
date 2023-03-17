@@ -15,6 +15,7 @@ import importlib
 import torch
 from tempfile import SpooledTemporaryFile, NamedTemporaryFile
 import mnist
+import torchvision
 import torch.nn.functional as F
 import metrics
 import evaluation as eval
@@ -137,7 +138,7 @@ def compress(
     # Compress the model
     compressed_model = general.compress_model(model, dataset, settings.actions, settings)
 
-    print("Compression Complete.")
+    plot.print_header("Compression Complete")
 
     # Evaluate the compressed model
     original_results = eval.get_results(model, dataset)
@@ -153,6 +154,30 @@ def compress(
         "compressed_results": compressed_results,
         "compressed_model": compressed_model_file,
     }
+
+
+# Evaluate the performance of the model and return the results
+@app.post("/evaluate")
+def compress(
+    dataset: str = Form(...),
+    model_state: UploadFile = File(...),
+    model_architecture: UploadFile = File(...),
+):
+
+    model_state_file: NamedTemporaryFile = utils.spooled_to_named(
+        model_state.file, suffix=".pth"
+    )
+    model_architecture_file: NamedTemporaryFile = utils.spooled_to_named(
+        model_architecture.file, suffix=".py"
+    )
+
+    model = torch.load(model_state_file.name)
+    dataset = supported_datasets[dataset]
+
+    # Evaluate the compressed model
+    results = eval.get_results(model, dataset)
+
+    return results
 
 
 def main(host, port):

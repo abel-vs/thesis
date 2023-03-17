@@ -63,6 +63,8 @@ def rank_filters(model, data_loader, device):
 
 # Method that analyzes the given model and returns suggested compression actions.
 # TODO: Implement the analyze method
+
+
 def analyze(
     model_state,
     model_architecture,
@@ -71,7 +73,6 @@ def analyze(
     performance_metric,
     perfomance_target,
 ):
-    
 
     compression_actions = []
 
@@ -83,21 +84,25 @@ def analyze(
         pass
     elif compression_goal == "Energy Usage":
         # Focus on making it fit on a CPU
-        pass
+        compression_actions.append(
+        CompressionAction(
+            type=CompressionType.quantization, name="INT-8 Dynamic Quantization"
+        )
+        )
     else:
         # Throw exception, shouldn't happen
         pass
 
-        
     compression_actions.append(
-        CompressionAction(type=CompressionType.distillation, name="Logits Distillation")
+        CompressionAction(type=CompressionType.distillation, name="Logits Distillation", settings={
+                          "performance_target": perfomance_target, 
+                          "compression_target": compression_target})
     )
     compression_actions.append(
-        CompressionAction(type=CompressionType.pruning, name="Magnitude Pruning")
-    )
-    compression_actions.append(
-        CompressionAction(
-            type=CompressionType.quantization, name="INT-8 Dynamic Quantization"
-        )
-    )
+        CompressionAction(type=CompressionType.pruning,
+                          name="Magnitude Pruning", settings={
+                          "performance_target": perfomance_target, 
+                          "compression_target": compression_target})
+    ), 
+    
     return compression_actions

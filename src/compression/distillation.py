@@ -72,15 +72,22 @@ def create_student_model(teacher_model, dataset: DataSet):
 # Method that performs the whole distillation procedure
 def perform_distillation(model, dataset: DataSet,  settings: dict = None):
 
+    print("Settings:", settings)
+
     # Create student model
     student_model = create_student_model(model, dataset)
 
     eval_criterion = dataset.criterion
     eval_metric = dataset.metric
+    
+    # Extract settings
+    performance_target= settings["performance_target"]
+
+    return
 
     # TODO: Find intelligent way to set the following properties
     distil_criterion = F.mse_loss
-    epochs = 5
+    epochs = 1
     optimizer = optim.Adam(student_model.parameters(), lr=0.01)
 
 

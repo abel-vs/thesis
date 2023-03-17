@@ -53,11 +53,10 @@ def get_module_sparsity(module):
 
 def test_and_get_metrics(model, dataset: DataSet):
 
-    device = general.get_device()
     example_input = general.get_example_input(dataset.test_loader)
     batch_size = example_input.shape[0]
 
-    loss, score, duration, batch_duration, data_duration = general.test(model, device, dataset)
+    loss, score, duration, batch_duration, data_duration = general.test(model, dataset)
 
     evaluation_metrics = {
         "model": model,
