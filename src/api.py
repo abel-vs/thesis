@@ -26,7 +26,7 @@ PORT = 8000
 
 app = FastAPI()
 
-origins = ["http://" + HOST + ":" + str(PORT), "http://localhost:3000"]
+origins = ["http://" + HOST + ":" + str(PORT), "http://localhost:3000", "http://localhost:3001", "http://localhost:3002"]
 
 app.add_middleware(
     CORSMiddleware,

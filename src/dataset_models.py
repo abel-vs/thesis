@@ -40,14 +40,14 @@ supported_datasets = {
         test_loader=DataLoader(tv.datasets.CIFAR10('../data', train=False, download=True, transform=tv.transforms.ToTensor(),),
                                batch_size=64, shuffle=True, **kwargs),
     ),
-    "IMAGENET": DataSet(
-        name="CIFAR-10",
-        criterion=F.cross_entropy,
-        metric=metrics.accuracy,
-        train_loader=DataLoader(tv.datasets.CIFAR10('../data', train=True, download=True, transform=tv.transforms.ToTensor(),),
-                                batch_size=64, shuffle=True, **kwargs),
-        test_loader=DataLoader(tv.datasets.CIFAR10('../data', train=False, download=True, transform=tv.transforms.ToTensor(),),
-                               batch_size=64, shuffle=True, **kwargs),
-    )
+    # "ImageNet": DataSet(
+    #     name="ImageNet",
+    #     criterion=F.cross_entropy,
+    #     metric=metrics.accuracy,
+    #     train_loader=DataLoader(tv.datasets.ImageNet('../data', train=True, download=True, transform=tv.transforms.ToTensor(),),
+    #                             batch_size=64, shuffle=True, **kwargs),
+    #     test_loader=DataLoader(tv.datasets.ImageNet('../data', train=False, download=True, transform=tv.transforms.ToTensor(),),
+    #                            batch_size=64, shuffle=True, **kwargs),
+    # )
 
 }
