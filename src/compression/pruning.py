@@ -79,6 +79,7 @@ def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineT
             
     # 2. Pruner initialization
     iterative_steps = 3 # You can prune your model to the target sparsity iteratively.
+    
     pruner = tp.pruner.MagnitudePruner(
         model, 
         example_inputs, 

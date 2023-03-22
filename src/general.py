@@ -1,9 +1,7 @@
-import time
 import torch
 import importlib
 import inspect
 from tqdm import tqdm
-import plot
 import compression.distillation as distil
 import compression.quantization as quant
 import compression.pruning as prune
@@ -11,6 +9,8 @@ import evaluation as eval
 import mnist
 import copy
 import torch.optim as optim
+import src.plot as plot
+import time
 
 from dataset_models import DataSet
 
@@ -63,15 +63,10 @@ def train(model, dataset: DataSet, optimizer=None):
     train_loss /= len(train_loader)
     train_score /= len(train_loader)
 
-    plot.print_performance(
-        "Train",
-        train_loss,
-        duration,
-        batch_duration,
-        data_duration,
-        metric,
-        train_score,
-    )
+    print("Train loss: {:.4f}".format(train_loss))
+    print("Train score: {:.4f}".format(train_score))
+
+    return train_loss, train_score, duration, batch_duration, data_duration
 
 
 # General test function
@@ -115,9 +110,8 @@ def test(model, dataset):
     test_loss /= len(test_loader)
     test_score /= len(test_loader)
     
-    plot.print_performance(
-        "Test", test_loss, duration, batch_duration, data_duration, metric, test_score
-    )
+    print("Test loss: {:.4f}".format(test_loss))
+    print("Test score: {:.4f}".format(test_score))
 
     return test_loss, test_score, duration, batch_duration, data_duration
 
@@ -164,7 +158,6 @@ def import_model(model_state, model_architecture):
 
 def get_device(no_cuda=False):
     use_cuda = not no_cuda and torch.cuda.is_available()
-    print(f"Using cuda: {use_cuda}")
 
     return torch.device("cuda" if use_cuda else "cpu")
 

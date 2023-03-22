@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import metrics
-from torchscan import summary
 
 HEADER_LENGTH = 80
 
@@ -134,9 +133,6 @@ def print_before_after_results(before, after):
         print("Number of MACs: {} -> {} ({:.2f}%)".format(before["macs"], after["macs"], reduction("macs")))
     print_header()
 
-
-def get_summary(model, example_input):
-    summary(model, example_input.size())
 
 def plot_relation(data, title, x_label, y_label, base_name):
     fig = plt.figure(figsize=(8, 4), dpi=100)

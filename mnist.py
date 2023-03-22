@@ -15,7 +15,7 @@ class MnistModel(nn.Module):
         x = F.max_pool2d(x, 2, 2) # [20, 24, 24] -> [20, 12, 12]
         x = F.relu(self.conv2(x)) # [20, 12, 12] -> [50, 8, 8]
         x = F.max_pool2d(x, 2, 2)  # [50, 8, 8] -> [50, 4, 4]
-        x = x.view(-1, 4*4*50) # [50, 4, 4] -> [50*4*4]
+        x = x.view(-1, 4*4*self.conv2.out_channels) # [50, 4, 4] -> [50*4*4]
         x = F.relu(self.fc1(x)) # [50*4*4] -> [500]
         x = self.fc2(x) # [500] -> [10]
         return F.log_softmax(x, dim=1) # [10]
