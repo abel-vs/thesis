@@ -9,7 +9,7 @@ import evaluation as eval
 import mnist
 import copy
 import torch.optim as optim
-import src.plot as plot
+import plot
 import time
 
 from dataset_models import DataSet

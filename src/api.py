@@ -171,6 +171,7 @@ def compress(
         model_architecture.file, suffix=".py"
     )
 
+    state_dict = torch.load(model_state_file.name)
     model = torch.load(model_state_file.name)
     dataset = supported_datasets[dataset]
 
