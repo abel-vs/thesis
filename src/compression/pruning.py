@@ -68,7 +68,7 @@ def get_ignored_layers(model):
     return ignored_layers
 
 
-def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineTune=False):
+def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineTune=False, iterative_steps=3):
     example_inputs = general.get_example_input(dataset.train_loader)
 
     # 0. importance criterion for parameter selections
@@ -77,9 +77,7 @@ def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineT
     # 1. ignore some layers that should not be pruned, e.g., the final classifier layer.
     ignored_layers = get_ignored_layers(model)
             
-    # 2. Pruner initialization
-    iterative_steps = 3 # You can prune your model to the target sparsity iteratively.
-    
+    # 2. Pruner initialization    
     pruner = tp.pruner.MagnitudePruner(
         model, 
         example_inputs, 

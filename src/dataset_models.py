@@ -35,16 +35,7 @@ supported_datasets = {
         name="CIFAR-10",
         criterion=F.nll_loss,
         metric=metrics.accuracy,
-        train_loader=DataLoader(tv.datasets.CIFAR10('../data', train=True, download=True, transform=tv.transforms.ToTensor(),),
-                                batch_size=64, shuffle=True, **kwargs),
-        test_loader=DataLoader(tv.datasets.CIFAR10('../data', train=False, download=True, transform=tv.transforms.ToTensor(),),
-                               batch_size=64, shuffle=True, **kwargs),
-    ),
-    "ImageNet": DataSet(
-        name="ImageNet",
-        criterion=F.cross_entropy,
-        metric=metrics.accuracy,
-        train_loader=DataLoader(tv.datasets.ImageNet('../data', train=True, download=True, transform=tv.transforms.Compose([
+        train_loader=DataLoader(tv.datasets.CIFAR10('../data', train=True, download=True, transform=tv.transforms.Compose([
     tv.transforms.RandomCrop(32, padding=4),
     tv.transforms.RandomHorizontalFlip(),
     tv.transforms.ToTensor(),
@@ -52,17 +43,13 @@ supported_datasets = {
                          std=[0.2023, 0.1994, 0.2010])
 ]),),
                                 batch_size=64, shuffle=True, **kwargs),
-        test_loader=DataLoader(tv.datasets.ImageNet('../data', train=False, download=True, transform=tv.transforms.ToTensor(),),
-                               batch_size=64, shuffle=True, **kwargs),
-    )
-
-}
-
-
-transform_train =)
-
-transform_test = tv.transforms.Compose([
+        test_loader=DataLoader(tv.datasets.CIFAR10('../data', train=False, download=True, transform=tv.transforms.Compose([
     tv.transforms.ToTensor(),
     tv.transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
                          std=[0.2023, 0.1994, 0.2010])
-])
+])),
+                               batch_size=64, shuffle=True, **kwargs),
+    ),
+
+
+}
