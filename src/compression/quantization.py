@@ -25,7 +25,7 @@ def static_quantization(model, dataset, backend="qnnpack", fuse=False):
     # Wrap the model in a QuantizedModelWrapper
     quantized_model = QuantizedModelWrapper(model)
 
-    # TODO: Figure out how to fuse modules
+    # Fuse layers if specified
     if fuse:
         modules_to_fuse = get_modules_to_fuse(model)
         torch.quantization.fuse_modules(model, modules_to_fuse, inplace=True)
@@ -56,14 +56,6 @@ def calibrate(model, data_loader):
     with torch.no_grad():
         for data, _ in data_loader:
             model(data)
-
-
-# Method that performs dynamic quantization on a model
-def dynamic_quantization(model, backend="qnnpack"):
-    torch.backends.quantized.engine = backend
-    quantized_model = torch.quantization.quantize_dynamic(
-        model, dtype=torch.qint8)
-    return quantized_model
 
 
 # Method to find modules to fuse
@@ -98,3 +90,25 @@ def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
     modules_to_fuse = [group for group in modules_to_fuse if len(group) >= 2]
 
     return modules_to_fuse
+
+
+# Method that performs dynamic quantization on a model
+def dynamic_quantization(model, backend=None, layers_to_quantize={torch.nn.Linear}, dtype=torch.qint8):
+    # Decouple the quantized model from the original model
+    model = copy.deepcopy(model)
+
+    # Set the model to evaluation mode
+    model.eval()
+
+    # Set the backend to use for quantization
+    if backend is not None:
+        torch.backends.quantized.engine = backend
+
+    # Quantize the model using dynamic quantization
+    quantized_model = torch.quantization.quantize_dynamic(
+        model,                 # Model to be quantized
+        layers_to_quantize,    # Set of layers to quantize
+        dtype=dtype            # Data type for quantized weights
+    )
+
+    return quantized_model
