@@ -18,7 +18,7 @@ class QuantizedModelWrapper(nn.Module):
 
 
 # Method that performs static quantization on a model
-def static_quantization(model, dataset, backend="qnnpack"):
+def static_quantization(model, dataset, backend="qnnpack", fuse=False):
     # Decouple the quantized model from the original model
     model = copy.deepcopy(model)
 
@@ -26,9 +26,9 @@ def static_quantization(model, dataset, backend="qnnpack"):
     quantized_model = QuantizedModelWrapper(model)
 
     # TODO: Figure out how to fuse modules
-    # modules_to_fuse = find_modules_to_fuse(model)
-    # if not len(modules_to_fuse) == 0:
-    #     model = torch.quantization.fuse_modules(model, modules_to_fuse)
+    if fuse:
+        modules_to_fuse = get_modules_to_fuse(model)
+        torch.quantization.fuse_modules(model, modules_to_fuse, inplace=True)
 
     # Set the backend to use for quantization
     # 'fbgemm' for server (x86), 'qnnpack' for mobile (ARM)
@@ -48,6 +48,8 @@ def static_quantization(model, dataset, backend="qnnpack"):
 
     return quantized_model
 
+# Method that calibrates a model for quantization
+
 
 def calibrate(model, data_loader):
     model.eval()
@@ -64,22 +66,35 @@ def dynamic_quantization(model, backend="qnnpack"):
     return quantized_model
 
 
-# TODO: Intelligently return a list of modules to fuse
-# Model Fusion combines multiple sequential modules (eg: [Conv2d, BatchNorm, ReLU]) into one.
-def find_modules_to_fuse(model):
-    modules_to_fuse = []
-    for name, module in model.named_modules():
-        pass
+# Method to find modules to fuse
+# Uses a depth-first search approach to traverse the model's hierarchy and identify layers to fuse
+def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
+    # Initialize layers_to_fuse as an empty list if not provided
+    if modules_to_fuse is None:
+        modules_to_fuse = []
+
+    # Iterate over the named children (layers) of the current model/module
+    for name, layer in model.named_children():
+        # Construct the full layer name by appending the current name to the prefix
+        layer_name = f"{prefix}{name}"
+
+        # Check if the current layer is a Conv2d or Linear layer
+        if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
+            # If it's the first layer or not a direct successor of the previous layer,
+            # create a new list to store the fusion candidate layers
+            if (len(modules_to_fuse) == 0) or (modules_to_fuse[-1][-1] != layer_name):
+                modules_to_fuse.append([layer])
+
+        # Check if the current layer is a BatchNorm2d or ReLU layer
+        if isinstance(layer, nn.BatchNorm2d) or isinstance(layer, nn.ReLU):
+            # If there are layers in layers_to_fuse, append the current layer to the last group
+            if modules_to_fuse:
+                modules_to_fuse[-1].append(layer)
+
+        # Recursively call find_layers_to_fuse for child layers, updating the prefix
+        get_modules_to_fuse(layer, modules_to_fuse, prefix=f"{layer_name}.")
+
+    # Filter out lists with less than 2 layers (not a valid fusion candidate)
+    modules_to_fuse = [group for group in modules_to_fuse if len(group) >= 2]
+
     return modules_to_fuse
-
-
-# # Fuse Conv+BN and Conv+BN+Relu modules prior to quantization
-# # This operation does not change the numerics
-# def fuse_model(self):
-#     for m in self.modules():
-#         if type(m) == ConvBNReLU:
-#             torch.ao.quantization.fuse_modules(m, ['0', '1', '2'], inplace=True)
-#         if type(m) == InvertedResidual:
-#             for idx in range(len(m.conv)):
-#                 if type(m.conv[idx]) == nn.Conv2d:
-#                     torch.ao.quantization.fuse_modules(m.conv, [str(idx), str(idx + 1)],inplace=True)
