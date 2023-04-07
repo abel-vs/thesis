@@ -15,8 +15,6 @@ import time
 from dataset_models import DataSet
 
 
-LOGGING_STEPS = 1000
-
 # General train function
 def train(model, dataset: DataSet, optimizer=None):
     device = get_device()
@@ -33,7 +31,7 @@ def train(model, dataset: DataSet, optimizer=None):
     train_loss = 0
     train_score = 0
 
-    for batch_id, (data, target) in enumerate(tqdm(train_loader, desc="Train")):
+    for (data, target) in tqdm(train_loader, desc="Train"):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -45,16 +43,6 @@ def train(model, dataset: DataSet, optimizer=None):
         if metric is not None:
             score = metric(output, target)
             train_score += score
-
-        if batch_id % LOGGING_STEPS == 0 and batch_id > 0:
-            plot.print_progress(
-                "Train",
-                batch_id,
-                data,
-                train_loader,
-                loss.item(),
-                score if metric is not None else None,
-            )
 
     et = time.time()
     duration = (et - st) * 1000
@@ -82,7 +70,7 @@ def test(model, dataset):
     st = time.time()
 
     with torch.no_grad():
-        for batch_id, (data, target) in enumerate(tqdm(test_loader, desc="Test")):
+        for (data, target) in tqdm(test_loader, desc="Test"):
             data, target = data.to(device), target.to(device)
             output = model(data)
             loss = criterion(output, target)
@@ -92,24 +80,13 @@ def test(model, dataset):
                 score = metric(output, target)
                 test_score += score
 
-            if batch_id % LOGGING_STEPS == 0 and batch_id > 0:
-                plot.print_progress(
-                    "Test",
-                    1,
-                    batch_id,
-                    data,
-                    test_loader,
-                    loss,
-                    score if metric is not None else None,
-                )
-
     et = time.time()
     duration = (et - st) * 1000
     batch_duration = duration / len(test_loader)
     data_duration = batch_duration / data.shape[0]
     test_loss /= len(test_loader)
     test_score /= len(test_loader)
-    
+
     print("Test loss: {:.4f}".format(test_loss))
     print("Test score: {:.4f}".format(test_score))
 
@@ -160,6 +137,7 @@ def get_device(no_cuda=False):
     use_cuda = not no_cuda and torch.cuda.is_available()
 
     return torch.device("cuda" if use_cuda else "cpu")
+
 
 def get_example_input(data_loader):
     input_batch = next(iter(data_loader))
