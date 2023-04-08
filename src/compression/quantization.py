@@ -48,9 +48,8 @@ def static_quantization(model, dataset, backend="qnnpack", fuse=False):
 
     return quantized_model
 
+
 # Method that calibrates a model for quantization
-
-
 def calibrate(model, data_loader):
     model.eval()
     with torch.no_grad():
@@ -93,7 +92,7 @@ def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
 
 
 # Method that performs dynamic quantization on a model
-def dynamic_quantization(model, backend=None, layers_to_quantize={torch.nn.Linear}, dtype=torch.qint8):
+def dynamic_quantization(model, backend="qnnpack", layers_to_quantize={torch.nn.Linear}, dtype=torch.qint8):
     # Decouple the quantized model from the original model
     model = copy.deepcopy(model)
 
@@ -101,8 +100,7 @@ def dynamic_quantization(model, backend=None, layers_to_quantize={torch.nn.Linea
     model.eval()
 
     # Set the backend to use for quantization
-    if backend is not None:
-        torch.backends.quantized.engine = backend
+    torch.backends.quantized.engine = backend
 
     # Quantize the model using dynamic quantization
     quantized_model = torch.quantization.quantize_dynamic(
