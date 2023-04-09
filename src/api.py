@@ -38,10 +38,14 @@ app.add_middleware(
 
 
 class AnalysisModel(BaseModel):
-    compression_goal: str  # Goal of the compression (model_size, inference_time, energy_usage).
-    compression_target: float  # Target value that the model should achieve after compression, as percentage of the original value.
-    performance_metric: str  # Metric used to measure the performance of the model.
-    performance_target: float  # Target value that the model should achieve after compression.
+    # Goal of the compression (model_size, inference_time, energy_usage).
+    compression_goal: str
+    # Target value that the model should achieve after compression, as percentage of the original value.
+    compression_target: float
+    # Metric used to measure the performance of the model.
+    performance_metric: str
+    # Target value that the model should achieve after compression.
+    performance_target: float
 
     @classmethod
     def __get_validators__(cls):
@@ -77,8 +81,7 @@ class CompressModel(BaseModel):
     """Passing list of compression actions directly to API is not possible, therefore this model"""
 
     actions: List[CompressionActionModel]
-    dataset: str 
-
+    dataset: str
 
     @classmethod
     def __get_validators__(cls):
@@ -136,7 +139,8 @@ def compress(
     dataset = supported_datasets[settings.dataset]
 
     # Compress the model
-    compressed_model = general.compress_model(model, dataset, settings.actions, settings)
+    compressed_model = general.compress_model(
+        model, dataset, settings.actions, settings)
 
     plot.print_header("Compression Complete")
 
@@ -179,6 +183,15 @@ def compress(
     results = eval.get_results(model, dataset)
 
     return results
+
+
+# Analze the given model and return suggested compression actions
+@app.post("/get-classes")
+async def analyze(
+    file: UploadFile = File(...),
+):
+    classes = await utils.get_classes(file)
+    return {"classes": classes}
 
 
 def main(host, port):
