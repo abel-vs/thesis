@@ -117,22 +117,6 @@ def get_module_classes(module):
     return classes
 
 
-def import_model(model_state, model_architecture):
-    # Import the module classes
-    module = importlib.import_module(model_architecture)
-    classes = get_module_classes(module)
-    for cls in classes:
-        globals()[cls.__name__] = cls
-
-    # Get device
-    device = get_device()
-
-    # Load the model
-    model = torch.load(model_state, map_location=torch.device(device))
-
-    return model
-
-
 def get_device(no_cuda=False):
     use_cuda = not no_cuda and torch.cuda.is_available()
 
@@ -157,12 +141,14 @@ def compress_model(model, dataset, compression_actions, settings):
     for action in compression_actions:
         if action["type"] == "distillation":
             plot.print_header("DISTILLATION STARTED")
-            compressed_model = distil.perform_distillation(compressed_model, dataset, action["settings"])
+            compressed_model = distil.perform_distillation(
+                compressed_model, dataset, action["settings"])
         if action["type"] == "quantization":
             plot.print_header("QUANTIZATION STARTED")
             compressed_model = quant.dynamic_quantization(compressed_model)
         if action["type"] == "pruning":
             plot.print_header("PRUNING STARTED")
-            compressed_model = prune.magnitude_pruning_structured(compressed_model, dataset, sparsity=0.5, fineTune=False)
+            compressed_model = prune.magnitude_pruning_structured(
+                compressed_model, dataset, sparsity=0.5, fineTune=False)
 
     return compressed_model
