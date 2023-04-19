@@ -28,7 +28,8 @@ def get_model_parameters(model):
 def get_model_flops(model, input_size):
     model_copy = copy.deepcopy(model)
 
-    flops, params = flopth(model_copy, input_size, bare_number=True, show_detail=False)
+    flops, params = flopth(model_copy, input_size,
+                           bare_number=True, show_detail=False)
 
     return flops
 
@@ -48,7 +49,8 @@ def get_model_pruned_parameters(model):
 
 # Method that returns the sparsity of a module
 def get_module_sparsity(module):
-    100.0 * float(torch.sum(module.weight == 0)) / float(module.weight.nelement())
+    100.0 * float(torch.sum(module.weight == 0)) / \
+        float(module.weight.nelement())
 
 
 def test_and_get_metrics(model, dataset: DataSet):
@@ -56,7 +58,8 @@ def test_and_get_metrics(model, dataset: DataSet):
     example_input = general.get_example_input(dataset.test_loader)
     batch_size = example_input.shape[0]
 
-    loss, score, duration, batch_duration, data_duration = general.test(model, dataset)
+    loss, score, duration, batch_duration, data_duration = general.test(
+        model, dataset)
 
     evaluation_metrics = {
         "model": model,
@@ -76,11 +79,11 @@ def test_and_get_metrics(model, dataset: DataSet):
 def get_results(model, dataset: DataSet):
     metrics = test_and_get_metrics(model, dataset)
 
-    flops = -1
-    try:
-        flops = get_model_flops(model, metrics["input_size"])
-    except:
-        print("Could not calculate FLOPS")
+    # flops = -1
+    # try:
+    #     flops = get_model_flops(model, metrics["input_size"])
+    # except:
+    #     print("Could not calculate FLOPS")
 
     macs, params = count_ops_and_params(model, metrics["example_input"])
 
@@ -91,7 +94,7 @@ def get_results(model, dataset: DataSet):
         "data_duration": metrics["data_duration"],
         "model_size": get_model_size(model),
         "params": round(params),
-        "flops": round(flops),
+        # "flops": round(flops),
         "macs": round(macs),
     }
 

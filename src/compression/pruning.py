@@ -35,7 +35,7 @@ def magnitude_pruning_global_unstructured(model, rate):
 def get_ignored_layers(model):
     ignored_layers = []
 
-    modules = model.children()
+    modules = list(model.children())
     # Add first layer, which is the input layer
     ignored_layers.append(modules[0])
     # Add final layer, which is the last classifier layer
@@ -52,14 +52,16 @@ def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineT
 
     # 1. ignore some layers that should not be pruned, e.g., the final classifier layer.
     ignored_layers = get_ignored_layers(model)
-            
-    # 2. Pruner initialization    
+
+    # 2. Pruner initialization
     pruner = tp.pruner.MagnitudePruner(
-        model, 
-        example_inputs, 
-        global_pruning=False, # If False, a uniform sparsity will be assigned to different layers.
-        importance=imp, # importance criterion for parameter selection
-        iterative_steps=iterative_steps, # the number of iterations to achieve target sparsity
+        model,
+        example_inputs,
+        # If False, a uniform sparsity will be assigned to different layers.
+        global_pruning=False,
+        importance=imp,  # importance criterion for parameter selection
+        # the number of iterations to achieve target sparsity
+        iterative_steps=iterative_steps,
         ch_sparsity=sparsity,
         ignored_layers=ignored_layers,
     )

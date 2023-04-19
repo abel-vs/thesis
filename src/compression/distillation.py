@@ -1,15 +1,15 @@
 import copy
 import torch
 from tqdm import tqdm
-import mnist
 import torch.nn.functional as F
 import torch.optim as optim
-import compression.pruning as prune
+import src.compression.pruning as prune
 import general
 import plot
 from dataset_models import DataSet
 
 LOGGING_STEPS = 1000
+
 
 def validate(student, test_data, eval_criterion, eval_metric):
     with torch.no_grad():
@@ -59,34 +59,36 @@ def distillation_train_loop(
     eval_criterion,
     eval_metric,
     optimizer,
-    epochs = 1,
-    threshold = None,
+    epochs=1,
+    threshold=None,
 ):
     # If a threshold is specified, train the student model until the threshold is reached or the score decreases
     if threshold is not None:
         previous_score = 0
         while True:
             # Validate the student model
-            test_loss, test_score = validate(student, test_data, eval_criterion, eval_metric)
+            test_loss, test_score = validate(
+                student, test_data, eval_criterion, eval_metric)
             print("Test loss: {}, Test score: {}".format(test_loss, test_score))
-
 
             # If the score is above the threshold, stop training
             if test_score > threshold:
-                print("Stopped training because threshold ({}) was reached: {}".format(threshold, test_score))
+                print("Stopped training because threshold ({}) was reached: {}".format(
+                    threshold, test_score))
                 break
 
             # If the score is decreasing, stop training
             if test_score < previous_score:
-                print("Stopped training because score started decreasing: from {} to {}".format(previous_score, test_score))
+                print("Stopped training because score started decreasing: from {} to {}".format(
+                    previous_score, test_score))
                 break
             else:
                 previous_score = test_score
 
             # Train the student model
-            distill_loss = train(teacher, student, train_data, distil_criterion, optimizer)
+            distill_loss = train(teacher, student, train_data,
+                                 distil_criterion, optimizer)
             print("Distillation loss: {}".format(distill_loss.item()))
-
 
     # Otherwise, train the student model for the specified number of epochs
     else:
@@ -95,11 +97,13 @@ def distillation_train_loop(
             print("Epoch: {}".format(epoch))
 
             # Train the student model
-            distill_loss = train(teacher, student, train_data, distil_criterion, optimizer)
+            distill_loss = train(teacher, student, train_data,
+                                 distil_criterion, optimizer)
             print("Distillation loss: {}".format(distill_loss.item()))
 
             # Validate the student model
-            test_loss, test_score = validate(student, test_data, eval_criterion, eval_metric)
+            test_loss, test_score = validate(
+                student, test_data, eval_criterion, eval_metric)
             print("Test loss: {}, Test score: {}".format(test_loss, test_score))
 
     return student
@@ -110,7 +114,8 @@ def distillation_train_loop(
 # For now, we just return a model with the same architecture as the teacher model
 def create_student_model(teacher_model, dataset: DataSet, fineTune=False):
     teacher_model = copy.deepcopy(teacher_model)
-    prune.magnitude_pruning_structured(teacher_model, dataset, sparsity=0.5, fineTune=fineTune)
+    prune.magnitude_pruning_structured(
+        teacher_model, dataset, sparsity=0.5, fineTune=fineTune)
     return teacher_model
 
 
@@ -118,8 +123,8 @@ def create_student_model(teacher_model, dataset: DataSet, fineTune=False):
 def perform_distillation(model, dataset: DataSet,  settings: dict = None):
 
     print("Settings:", settings)
-     # Extract settings
-    performance_target= settings.get("performance_target", None)
+    # Extract settings
+    performance_target = settings.get("performance_target", None)
     epochs = settings.get("epochs", 1)
     sparsity = settings.get("sparsity", 0.5)
     fineTune = settings.get("fineTune", False)
@@ -132,13 +137,11 @@ def perform_distillation(model, dataset: DataSet,  settings: dict = None):
 
     eval_criterion = dataset.criterion
     eval_metric = dataset.metric
-    
-   
 
     # TODO: Find intelligent way to set the following properties
     distil_criterion = F.mse_loss
     optimizer = optim.Adam(student_model.parameters(), lr=0.01)
-    
+
     print("\n")
     plot.print_header("Performing distillation")
     compressed_model = distillation_train_loop(

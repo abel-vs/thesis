@@ -1,12 +1,11 @@
+import itertools
 import torch
-import importlib
 import inspect
 from tqdm import tqdm
 import compression.distillation as distil
 import compression.quantization as quant
 import compression.pruning as prune
 import evaluation as eval
-import mnist
 import copy
 import torch.optim as optim
 import plot
@@ -61,6 +60,9 @@ def train(model, dataset: DataSet, optimizer=None):
 def test(model, dataset):
     device = get_device()
     test_loader = dataset.test_loader
+    if dataset.cap:
+        test_loader = itertools.islice(test_loader, dataset.cap)
+
     criterion = dataset.criterion
     metric = dataset.metric
 
@@ -82,10 +84,11 @@ def test(model, dataset):
 
     et = time.time()
     duration = (et - st) * 1000
-    batch_duration = duration / len(test_loader)
+    no_batches = dataset.cap if dataset.cap is not None else len(test_loader)
+    batch_duration = duration / no_batches
     data_duration = batch_duration / data.shape[0]
-    test_loss /= len(test_loader)
-    test_score /= len(test_loader)
+    test_loss /= no_batches
+    test_score /= no_batches
 
     print("Test loss: {:.4f}".format(test_loss))
     print("Test score: {:.4f}".format(test_score))
