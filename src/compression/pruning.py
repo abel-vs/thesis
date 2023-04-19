@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.utils.prune as prune
 import torch_pruning as tp
 import general
@@ -40,6 +41,30 @@ def get_ignored_layers(model):
     ignored_layers.append(modules[0])
     # Add final layer, which is the last classifier layer
     ignored_layers.append(modules[-1])
+
+    def get_layers_not_to_prune(model):
+    layers_not_to_prune = []
+
+    for module in model.children():
+        # Skip input and output layers
+        if isinstance(module, nn.Conv2d) and (previous_module is None or isinstance(previous_module, nn.Linear)):
+            layers_not_to_prune.append(module)
+            continue
+
+        # Skip batch normalization layers
+        if isinstance(module, nn.BatchNorm2d):
+            layers_not_to_prune.append(module)
+            continue
+
+        # Skip shortcut connections and first and last layers in each residual block
+        if isinstance(module, nn.Conv2d):
+            if isinstance(previous_module, nn.ReLU) or isinstance(previous_module, nn.Conv2d):
+                layers_not_to_prune.append(module)
+                continue
+
+        previous_module = module
+
+    return layers_not_to_prune
 
     return ignored_layers
 
