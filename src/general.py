@@ -15,6 +15,8 @@ from dataset_models import DataSet
 
 
 # General train function
+
+
 def train(model, dataset: DataSet, optimizer=None):
     device = get_device()
     train_loader = dataset.train_loader
@@ -138,6 +140,10 @@ def save_model(model, path):
 def compress_model(model, dataset, compression_actions, settings):
     """Main method for compressing a model via API"""
 
+    print("Settings: ", settings)
+    performance_target = settings.performance_target/100
+    compression_target = settings.compression_target/100
+
     # Compress the model
     compressed_model = copy.deepcopy(model)
     print("Compression Actions:", compression_actions)
@@ -151,7 +157,10 @@ def compress_model(model, dataset, compression_actions, settings):
             compressed_model = quant.dynamic_quantization(compressed_model)
         if action["type"] == "pruning":
             plot.print_header("PRUNING STARTED")
-            compressed_model = prune.magnitude_pruning_structured(
-                compressed_model, dataset, sparsity=0.5, fineTune=False)
+            action_settings = action["settings"]
+            compressed_model = prune.magnitude_pruning_structured(compressed_model, dataset, sparsity=action_settings.get(
+                "sparsity"), fineTune=action_settings.get("fineTune", False), strategy="NO_CONV")
+
+        print("Compressed Model", compressed_model)
 
     return compressed_model

@@ -1,18 +1,12 @@
-import copy
 import os
-import time
 import torch
-from flopth import flopth
 import general
-import metrics
 import torch.nn.functional as F
 from op_counter import count_ops_and_params
 from dataset_models import DataSet
 
 # Method that returns the model size in MB
-
-
-def get_model_size(model):
+def get_size(model):
     torch.save(model.state_dict(), "tmp.pt")
     model_size = os.path.getsize("tmp.pt") / (1024 * 1024)
     os.remove("tmp.pt")
@@ -20,23 +14,19 @@ def get_model_size(model):
 
 
 # Method that returns the number of parameters in the model
-def get_model_parameters(model):
+def get_params(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 # Method that returns the number of FLOPS the model executes
-def get_model_flops(model, input_size):
-    model_copy = copy.deepcopy(model)
-
-    flops, params = flopth(model_copy, input_size,
-                           bare_number=True, show_detail=False)
-
+def get_flops(model, example_input):
+    flops, _ = count_ops_and_params(model, example_input)
     return flops
 
-
-def get_MACS(model, example_input):
-    macs, params = count_ops_and_params(model, example_input)
-    return macs
+# Method that returns both the number of FLOPS and parameters
+def get_flops_and_params(model, example_input):
+    flops, params = count_ops_and_params(model, example_input)
+    return flops, params
 
 
 # Method that returns the number of pruned parameters in the model
@@ -53,8 +43,8 @@ def get_module_sparsity(module):
         float(module.weight.nelement())
 
 
+# Method that tests the model and returns the metrics
 def test_and_get_metrics(model, dataset: DataSet):
-
     example_input = general.get_example_input(dataset.test_loader)
     batch_size = example_input.shape[0]
 
@@ -76,14 +66,15 @@ def test_and_get_metrics(model, dataset: DataSet):
     return evaluation_metrics
 
 
-def get_results(model, dataset: DataSet):
+# Method that tests the model and returns the results
+def test_and_get_results(model, dataset: DataSet):
     metrics = test_and_get_metrics(model, dataset)
 
-    # flops = -1
-    # try:
-    #     flops = get_model_flops(model, metrics["input_size"])
-    # except:
-    #     print("Could not calculate FLOPS")
+    flops = -1
+    try:
+        flops = get_flops(model, metrics["input_size"])
+    except:
+        print("Could not calculate FLOPS")
 
     macs, params = count_ops_and_params(model, metrics["example_input"])
 
@@ -92,7 +83,7 @@ def get_results(model, dataset: DataSet):
         "score": metrics["score"],
         "batch_duration": metrics["batch_duration"],
         "data_duration": metrics["data_duration"],
-        "model_size": get_model_size(model),
+        "model_size": get_size(model),
         "params": round(params),
         # "flops": round(flops),
         "macs": round(macs),

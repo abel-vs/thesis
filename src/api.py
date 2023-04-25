@@ -131,8 +131,8 @@ def compress(
     plot.print_header("Compression Complete")
 
     # Evaluate the compressed model
-    original_results = eval.get_results(model, dataset)
-    compressed_results = eval.get_results(compressed_model, dataset)
+    original_results = eval.test_and_get_results(model, dataset)
+    compressed_results = eval.test_and_get_results(compressed_model, dataset)
 
     # Save the compressed model into a temporary file
     compressed_model_file = NamedTemporaryFile(suffix=".pth", delete=False)
@@ -142,6 +142,7 @@ def compress(
     return {
         "original_results": original_results,
         "compressed_results": compressed_results,
+        "compressed_architecture": str(compressed_model),
         "compressed_model": compressed_model_file,
     }
 
@@ -165,7 +166,7 @@ def compress(
     print("Dataset:", dataset)
 
     # Evaluate the compressed model
-    results = eval.get_results(model, dataset)
+    results = eval.test_and_get_results(model, dataset)
 
     print("Results:", results)
 

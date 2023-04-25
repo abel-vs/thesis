@@ -1,3 +1,4 @@
+import copy
 import torch
 import torch.nn as nn
 import torch.nn.utils.prune as prune
@@ -33,7 +34,7 @@ def magnitude_pruning_global_unstructured(model, rate):
 
 # Method to get the layers that should be ignored.
 # TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
-def get_ignored_layers(model):
+def get_ignored_layers(model, strategy):
     ignored_layers = []
 
     modules = list(model.children())
