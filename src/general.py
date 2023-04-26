@@ -19,8 +19,9 @@ from dataset_models import DataSet
 
 def train(model, dataset: DataSet, optimizer=None):
     device = get_device()
-    train_loader = dataset.train_loader
-    criterion = dataset.criterion
+    model.to(device)
+    train_loader = dataset.train_loader.to(device)
+    criterion = dataset.criterion.to(device)
     metric = dataset.metric
 
     if optimizer == None:
@@ -61,7 +62,8 @@ def train(model, dataset: DataSet, optimizer=None):
 # General test function
 def test(model, dataset):
     device = get_device()
-    test_loader = dataset.test_loader
+    model.to(device)
+    test_loader = dataset.test_loader.to(device)
     if dataset.cap:
         test_loader = itertools.islice(test_loader, dataset.cap)
 
@@ -129,8 +131,9 @@ def get_device(no_cuda=False):
 
 
 def get_example_input(data_loader):
+    device = get_device()
     input_batch = next(iter(data_loader))
-    return input_batch[0]
+    return input_batch[0].to(device)
 
 
 def save_model(model, path):
