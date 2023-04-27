@@ -100,6 +100,18 @@ def test(model, dataset):
     return test_loss, test_score, duration, batch_duration, data_duration
 
 
+# General finetune method
+def finetune(model, dataset, target, max_it):
+    score = 0
+    for i in range(max_it):
+        last_score = score
+        metrics = train(model, dataset)
+        score = metrics[1]
+        if score >= target or last_score > score:
+            break
+        
+        
+
 # Method that imports the classes from a module to the globals dictionary of a process
 def import_module_classes(module, globals):
     # Get all classes in the module
