@@ -34,17 +34,9 @@ def magnitude_pruning_global_unstructured(model, rate):
 
 # Method to get the layers that should be ignored.
 # TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
-def get_ignored_layers(model, strategy):
-    ignored_layers = []
-
-    modules = list(model.children())
-    # Add first layer, which is the input layer
-    ignored_layers.append(modules[0])
-    # Add final layer, which is the last classifier layer
-    ignored_layers.append(modules[-1])
-
-    def get_layers_not_to_prune(model):
+def get_layers_not_to_prune(model):
     layers_not_to_prune = []
+    previous_module = None
 
     for module in model.children():
         # Skip input and output layers
@@ -67,8 +59,6 @@ def get_ignored_layers(model, strategy):
 
     return layers_not_to_prune
 
-    return ignored_layers
-
 
 def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineTune=False, iterative_steps=3):
     example_inputs = general.get_example_input(dataset.train_loader)
@@ -77,7 +67,7 @@ def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineT
     imp = tp.importance.MagnitudeImportance(p=2, group_reduction='mean')
 
     # 1. ignore some layers that should not be pruned, e.g., the final classifier layer.
-    ignored_layers = get_ignored_layers(model)
+    ignored_layers = get_layers_not_to_prune(model)
 
     # 2. Pruner initialization
     pruner = tp.pruner.MagnitudePruner(

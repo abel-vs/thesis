@@ -20,8 +20,8 @@ from dataset_models import DataSet
 def train(model, dataset: DataSet, optimizer=None):
     device = get_device()
     model.to(device)
-    train_loader = dataset.train_loader.to(device)
-    criterion = dataset.criterion.to(device)
+    train_loader = dataset.train_loader
+    criterion = dataset.criterion
     metric = dataset.metric
 
     if optimizer == None:
@@ -63,7 +63,7 @@ def train(model, dataset: DataSet, optimizer=None):
 def test(model, dataset):
     device = get_device()
     model.to(device)
-    test_loader = dataset.test_loader.to(device)
+    test_loader = dataset.test_loader
     if dataset.cap:
         test_loader = itertools.islice(test_loader, dataset.cap)
 
