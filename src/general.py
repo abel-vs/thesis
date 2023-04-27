@@ -101,16 +101,17 @@ def test(model, dataset):
 
 
 # General finetune method
-def finetune(model, dataset, target, max_it):
-    score = 0
-    for i in range(max_it):
+def finetune(model, dataset, target, max_it=None):
+    score, last_score, i = 0, 0, 1
+    while score < target and score >= last_score:
         last_score = score
         metrics = train(model, dataset)
         score = metrics[1]
-        if score >= target or last_score > score:
+        if max_it is not None and i >= max_it:
+            print("Maximum number of iterations reached")
             break
-        
-        
+        i += 1
+    print("Finetuning finished after {} iterations".format(i))
 
 # Method that imports the classes from a module to the globals dictionary of a process
 def import_module_classes(module, globals):
