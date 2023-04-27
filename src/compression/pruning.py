@@ -31,12 +31,20 @@ def magnitude_pruning_global_unstructured(model, rate):
 
 """ STRUCTURED PRUNING """
 
+# Method that gets first and last layer
+# TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
+def get_first_last_layers(model):
+    layers = list(model.children())
+    return [layers[0], layers[-1]]
+
 
 # Method to get the layers that should be ignored.
-# TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
 def get_layers_not_to_prune(model):
     layers_not_to_prune = []
     previous_module = None
+
+    first_last_layers = get_first_last_layers(model)
+    layers_not_to_prune.extend(first_last_layers)
 
     for module in model.children():
         # Skip input and output layers
