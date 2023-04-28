@@ -1,0 +1,56 @@
+experiments:
+  - name: "VGG16_ImageNet"
+    model_type: "CNN"
+    architecture: "vgg16"
+    dataset: "ImageNet"
+    performance_target: 0.9
+    compression_type: "inference_time"
+    compression_target: 0.5
+
+  - name: "ResNet50_ImageNet"
+    model_type: "CNN"
+    architecture: "resnet50"
+    dataset: "ImageNet"
+    performance_target: 0.9
+    compression_type: "storage_size"
+    compression_target: 0.5
+
+  - name: "EfficientNet_ImageNet"
+    model_type: "CNN"
+    architecture: "efficientnet-b0"
+    dataset: "ImageNet"
+    performance_target: 0.9
+    compression_type: "computations"
+    compression_target: 0.5
+
+  - name: "VGG16_CIFAR10"
+    model_type: "CNN"
+    architecture: "vgg16"
+    dataset: "CIFAR-10"
+    performance_target: 0.9
+    compression_type: "inference_time"
+    compression_target: 0.5
+
+  - name: "BERT_SQuAD"
+    model_type: "Transformer"
+    architecture: "bert-base-uncased"
+    dataset: "SQuAD"
+    performance_target: 0.9
+    compression_type: "inference_time"
+    compression_target: 0.5
+
+  - name: "GPT2_GLUE"
+    model_type: "Transformer"
+    architecture: "gpt2"
+    dataset: "GLUE"
+    performance_target: 0.9
+    compression_type: "storage_size"
+    compression_target: 0.5
+
+  - name: "T5_SQuAD"
+    model_type: "Transformer"
+    architecture: "t5-small"
+    dataset: "SQuAD"
+    performance_target: 0.9
+    compression_type: "computations"
+    compression_target: 0.5
