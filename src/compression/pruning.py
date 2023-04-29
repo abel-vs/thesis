@@ -68,14 +68,17 @@ def get_layers_not_to_prune(model):
     return layers_not_to_prune
 
 
-def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineTune=False, iterative_steps=3):
+def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineTune=False, iterative_steps=3, layers = None):
     example_inputs = general.get_example_input(dataset.train_loader)
 
     # 0. importance criterion for parameter selections
     imp = tp.importance.MagnitudeImportance(p=2, group_reduction='mean')
 
     # 1. ignore some layers that should not be pruned, e.g., the final classifier layer.
-    ignored_layers = get_layers_not_to_prune(model)
+    if layers is None:
+        ignored_layers = get_layers_not_to_prune(model)
+    else:
+        ignored_layers = get_layers_not_to_prune(layers)
 
     # 2. Pruner initialization
     pruner = tp.pruner.MagnitudePruner(
