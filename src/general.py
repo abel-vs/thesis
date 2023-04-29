@@ -143,9 +143,13 @@ def get_device(no_cuda=False):
     return torch.device("cuda" if use_cuda else "cpu")
 
 
-def get_example_input(data_loader):
+def get_example_input_batch(data_loader):
+    return next(iter(data_loader))
+
+
+def get_example_inputs(data_loader):
     device = get_device()
-    input_batch = next(iter(data_loader))
+    input_batch = get_example_input_batch(data_loader)
     return input_batch[0].to(device)
 
 

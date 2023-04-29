@@ -45,7 +45,7 @@ def get_module_sparsity(module):
 
 # Method that tests the model and returns the metrics
 def get_metrics(model, dataset: DataSet):
-    example_input = general.get_example_input(dataset.test_loader)
+    example_input = general.get_example_inputs(dataset.test_loader)
     batch_size = example_input.shape[0]
 
     loss, score, duration, batch_duration, data_duration = general.test(
