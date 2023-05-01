@@ -2,6 +2,8 @@ import copy
 import torch
 import torch.nn as nn
 from torch.quantization import QuantStub, DeQuantStub
+from tqdm import tqdm
+import general
 
 
 class QuantizedModelWrapper(nn.Module):
@@ -18,7 +20,7 @@ class QuantizedModelWrapper(nn.Module):
 
 
 # Method that performs static quantization on a model
-def static_quantization(model, dataset, backend="qnnpack", fuse=False):
+def static_quantization(model, dataset, backend="fbgemm", fuse=False):
     # Decouple the quantized model from the original model
     model = copy.deepcopy(model)
 
@@ -27,8 +29,7 @@ def static_quantization(model, dataset, backend="qnnpack", fuse=False):
 
     # Fuse layers if specified
     if fuse:
-        modules_to_fuse = get_modules_to_fuse(model)
-        torch.quantization.fuse_modules(model, modules_to_fuse, inplace=True)
+        fuse_modules(quantized_model)
 
     # Set the backend to use for quantization
     # 'fbgemm' for server (x86), 'qnnpack' for mobile (ARM)
@@ -39,9 +40,7 @@ def static_quantization(model, dataset, backend="qnnpack", fuse=False):
     torch.quantization.prepare(quantized_model, inplace=True)
 
     # Calibrate with the training set
-    print("Calibrating...")
     calibrate(quantized_model, dataset.train_loader)
-    print("Calibration complete.")
 
     # Convert the model to a quantized model
     torch.quantization.convert(quantized_model, inplace=True)
@@ -51,11 +50,19 @@ def static_quantization(model, dataset, backend="qnnpack", fuse=False):
 
 # Method that calibrates a model for quantization
 def calibrate(model, data_loader):
+    device = general.get_device()
+    model.to(device)
     model.eval()
     with torch.no_grad():
-        for data, _ in data_loader:
+        for data, _ in tqdm(data_loader, desc="Calibration"):
+            data = data.to(device)
             model(data)
+    print("Calibration complete.")
 
+
+def fuse_modules(model):
+    modules_to_fuse = get_modules_to_fuse(model)
+    torch.quantization.fuse_modules(model, modules_to_fuse, inplace=True)
 
 # Method to find modules to fuse
 # Uses a depth-first search approach to traverse the model's hierarchy and identify layers to fuse
@@ -92,7 +99,7 @@ def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
 
 
 # Method that performs dynamic quantization on a model
-def dynamic_quantization(model, backend="qnnpack", layers_to_quantize={torch.nn.Linear}, dtype=torch.qint8):
+def dynamic_quantization(model, backend="fbgemm", layers_to_quantize={torch.nn.Linear}, dtype=torch.qint8):
     # Decouple the quantized model from the original model
     model = copy.deepcopy(model)
 
