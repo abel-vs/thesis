@@ -1,21 +1,25 @@
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 import metrics
 import torchvision as tv
 from transformers import glue_convert_examples_to_features, glue_output_modes, glue_processors, AutoTokenizer
-from torchvision.datasets import CocoDetection, ImageNet, CIFAR10
+from torchvision.datasets import CocoDetection, ImageNet, CIFAR10, MNIST
 from transformers import glue_tasks_num_labels, GlueDataset, SquadDataset, SquadDataTrainingArguments
+from torch.utils.data.sampler import SubsetRandomSampler
+import numpy as np
 
+DATA_DIR = "/workspace/volume/data"
 
 """ General Dataset Class """
 
 class DataSet:
-    def __init__(self, name: str, criterion, metric, train_loader, test_loader, cap=None):
+    def __init__(self, name: str, criterion, metric, train_loader, val_loader, test_loader, cap=None):
         self.name = name
         self.criterion = criterion
         self.metric = metric
         self.train_loader = train_loader
+        self.val_loader = val_loader
         self.test_loader = test_loader
         self.cap = cap
 
@@ -30,8 +34,56 @@ use_cuda = False
 kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 
 
+""" Helper Methods """
+def get_train_val_sampler(dataset, shuffle=False):
+    valid_size = 0.1
+    random_seed = 42
 
-""" Supported Datasets """
+    num_train = len(dataset)
+    indices = list(range(num_train))
+    split = int(np.floor(valid_size * num_train))
+
+    # Shuffling is done by the sampler, don't do it twice in Dataloader
+    if shuffle:
+        np.random.seed(random_seed)
+        np.random.shuffle(indices)
+
+    train_idx, valid_idx = indices[split:], indices[:split]
+    train_sampler = SubsetRandomSampler(train_idx)
+    val_sampler = SubsetRandomSampler(valid_idx)
+
+    return train_sampler, val_sampler
+
+
+
+""" Supported Dataloaders """
+def get_cifar_data_loaders():
+    train_dataset = CIFAR10(DATA_DIR, train=True, download=True)
+    test_dataset = CIFAR10(DATA_DIR, train=False, download=True)
+    train_sampler, val_sampler = get_train_val_sampler(train_dataset, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, **kwargs)
+    val_loader = DataLoader(train_dataset, batch_size=64, sampler=val_sampler, **kwargs)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, **kwargs)
+    return train_loader, val_loader, test_loader
+
+def get_mnist_data_loaders():
+    train_dataset = MNIST(DATA_DIR, train=True, download=True)
+    test_dataset = MNIST(DATA_DIR, train=False, download=True)
+    train_sampler, val_sampler = get_train_val_sampler(train_dataset, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, **kwargs)
+    val_loader = DataLoader(train_dataset, batch_size=64, sampler=val_sampler, **kwargs)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, **kwargs)
+    return train_loader, val_loader, test_loader
+
+def get_imagenet_loaders():
+    train_dataset = ImageNet(DATA_DIR, split='train')
+    val_dataset = ImageNet(DATA_DIR, split='val')
+    test_dataset = ImageNet(DATA_DIR, split='val')
+    train_sampler, val_sampler = get_train_val_sampler(train_dataset, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, **kwargs)
+    val_loader = DataLoader(val_dataset, batch_size=64, sampler=val_sampler, **kwargs)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, **kwargs)
+    return train_loader, val_loader, test_loader
 
 
 # Add this function for COCO dataset processing
@@ -89,43 +141,31 @@ supported_datasets = {
     #     )
         
 }
+    
+
 
 
 """ Older Supported Datasets """
 
-train_cifar_transform = tv.transforms.Compose([
-    tv.transforms.RandomCrop(
-        32, padding=4),
-    tv.transforms.RandomHorizontalFlip(),
-    tv.transforms.ToTensor(),
-    tv.transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                            std=[0.2023, 0.1994, 0.2010])
-])
-
-test_cifar_transform = tv.transforms.Compose([
-            tv.transforms.ToTensor(),
-            tv.transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                                    std=[0.2023, 0.1994, 0.2010])
-        ])
+cifar_train_loader, cifar_val_loader, cifar_test_loader = get_cifar_data_loaders()
+mnist_train_loader, mnist_val_loader, mnist_test_loader = get_mnist_data_loaders()
 
 supported_datasets.update({
     "MNIST": DataSet(
         name="MNIST",
         criterion=F.nll_loss,
         metric=metrics.accuracy,
-        train_loader=DataLoader(tv.datasets.MNIST('/workspace/volume/data', train=True, download=True, transform=tv.transforms.ToTensor(),),
-                                batch_size=64, shuffle=True, **kwargs),
-        test_loader=DataLoader(tv.datasets.MNIST('/workspace/volume/data', train=False, download=True, transform=tv.transforms.ToTensor(),),
-                               batch_size=1000, shuffle=True, **kwargs),
+        train_loader=mnist_train_loader,
+        val_loader=mnist_val_loader,
+        test_loader=mnist_test_loader,
     ),
     "CIFAR-10": DataSet(
         name="CIFAR-10",
         criterion=F.cross_entropy,
         metric=metrics.accuracy,
-        train_loader=DataLoader(CIFAR10('/workspace/volume/data', train=True, download=True, transform=train_cifar_transform),
-                                batch_size=16, shuffle=True, **kwargs),
-        test_loader=DataLoader(CIFAR10('/workspace/volume/data', train=False, download=True, transform=test_cifar_transform),
-                               batch_size=64, shuffle=True, **kwargs),
+        train_loader=cifar_train_loader,
+        val_loader=cifar_val_loader,
+        test_loader=cifar_test_loader
     ),
 })
 

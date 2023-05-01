@@ -15,8 +15,6 @@ from dataset_models import DataSet
 
 
 # General train function
-
-
 def train(model, dataset: DataSet, optimizer=None):
     device = get_device()
     model.to(device)
@@ -58,12 +56,16 @@ def train(model, dataset: DataSet, optimizer=None):
 
     return train_loss, train_score, duration, batch_duration, data_duration
 
-
 # General test function
-def test(model, dataset):
+def test(model, dataset , validate=False):
     device = get_device()
     model.to(device)
-    test_loader = dataset.test_loader
+
+    if validate:
+        test_loader = dataset.val_loader
+    else:
+        test_loader = dataset.test_loader
+
     if dataset.cap:
         test_loader = itertools.islice(test_loader, dataset.cap)
 
@@ -76,7 +78,7 @@ def test(model, dataset):
     st = time.time()
 
     with torch.no_grad():
-        for (data, target) in tqdm(test_loader, desc="Test"):
+        for (data, target) in tqdm(test_loader, desc=("Test" if not validate else "Validate")):
             data, target = data.to(device), target.to(device)
             output = model(data)
             loss = criterion(output, target)
@@ -100,15 +102,22 @@ def test(model, dataset):
     return test_loss, test_score, duration, batch_duration, data_duration
 
 
+def validate(model, dataset):
+    return test(model, dataset, validate=True)
+
 # General finetune method
 def finetune(model, dataset, target, max_it=None):
     score, last_score, i = 0, 0, 1
     while score < target and score >= last_score:
         last_score = score
-        metrics = train(model, dataset)
+        train(model, dataset)
+        metrics = validate(model, dataset)
         score = metrics[1]
         if max_it is not None and i >= max_it:
             print("Maximum number of iterations reached")
+            break
+        if score < last_score:
+            print("Finetuning stopped due to decreasing performance")
             break
         i += 1
     print("Finetuning finished after {} iterations".format(i))

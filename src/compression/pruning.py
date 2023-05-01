@@ -69,7 +69,7 @@ def get_layers_not_to_prune(model):
 
 
 def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineTune=False, iterative_steps=3, layers = None):
-    example_inputs = general.get_example_input_batch(dataset.train_loader)
+    example_inputs = general.get_example_inputs(dataset.train_loader)
 
     # 0. importance criterion for parameter selections
     imp = tp.importance.MagnitudeImportance(p=2, group_reduction='mean')
