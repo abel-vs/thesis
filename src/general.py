@@ -106,21 +106,38 @@ def validate(model, dataset):
     return test(model, dataset, validate=True)
 
 # General finetune method
-def finetune(model, dataset, target, max_it=None):
-    score, last_score, i = 0, 0, 1
-    while score < target and score >= last_score:
-        last_score = score
+# General finetune method
+def finetune(model, dataset, target, max_it=None, patience=3):
+    score, best_score, i = 0, 0, 1
+    best_model = copy.deepcopy(model)
+    epochs_without_improvement = 0
+
+    while score < target and epochs_without_improvement < patience:
         train(model, dataset)
         metrics = validate(model, dataset)
         score = metrics[1]
+
+        if score > best_score:
+            best_model = copy.deepcopy(model)
+            best_score = score
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
         if max_it is not None and i >= max_it:
             print("Maximum number of iterations reached")
             break
-        if score < last_score:
-            print("Finetuning stopped due to decreasing performance")
-            break
+
         i += 1
+
+    if epochs_without_improvement >= patience:
+        print("Finetuning stopped due to early stopping with patience = {}".format(patience))
+    else:
+        print("Finetuning stopped due to reaching the target score")
+
     print("Finetuning finished after {} iterations".format(i))
+    print("Best score: {:.4f}".format(best_score))
+    return best_model
 
 # Method that imports the classes from a module to the globals dictionary of a process
 def import_module_classes(module, globals):
