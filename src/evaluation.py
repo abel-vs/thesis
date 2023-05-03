@@ -70,12 +70,6 @@ def get_metrics(model, dataset: DataSet, device=None):
 def get_results(model, dataset: DataSet, device=None):
     metrics = get_metrics(model, dataset, device=device)
 
-    flops = -1
-    try:
-        flops = get_flops(model, metrics["input_size"])
-    except:
-        print("Could not calculate FLOPS")
-
     macs, params = count_ops_and_params(model, metrics["example_input"])
 
     results = {
@@ -85,7 +79,6 @@ def get_results(model, dataset: DataSet, device=None):
         "data_duration": metrics["data_duration"],
         "model_size": get_size(model),
         "params": round(params),
-        # "flops": round(flops),
         "macs": round(macs),
     }
 
