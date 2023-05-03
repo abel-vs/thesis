@@ -15,8 +15,9 @@ from dataset_models import DataSet
 
 
 # General train function
-def train(model, dataset: DataSet, optimizer=None):
-    device = get_device()
+def train(model, dataset: DataSet, optimizer=None, device=None):
+    if device is None:
+        device = get_device()
     model.to(device)
     train_loader = dataset.train_loader
     criterion = dataset.criterion
@@ -57,8 +58,9 @@ def train(model, dataset: DataSet, optimizer=None):
     return train_loss, train_score, duration, batch_duration, data_duration
 
 # General test function
-def test(model, dataset , validate=False):
-    device = get_device()
+def test(model, dataset , validate=False, device=None):
+    if device is None:
+        device = get_device()
     model.to(device)
 
     if validate:
@@ -102,23 +104,24 @@ def test(model, dataset , validate=False):
     return test_loss, test_score, duration, batch_duration, data_duration
 
 
-def validate(model, dataset):
-    return test(model, dataset, validate=True)
+def validate(model, dataset, device=None):
+    return test(model, dataset, validate=True, device=device)
 
 # General finetune method
-# General finetune method
-def finetune(model, dataset, target, max_it=None, patience=3):
+def finetune(model, dataset, target, max_it=None, patience=3, save_path=None, device=None):
     score, best_score, i = 0, 0, 1
     best_model = copy.deepcopy(model)
     epochs_without_improvement = 0
 
     while score < target and epochs_without_improvement < patience:
-        train(model, dataset)
-        metrics = validate(model, dataset)
+        train(model, dataset, device=device)
+        metrics = validate(model, dataset, device=device)
         score = metrics[1]
 
         if score > best_score:
             best_model = copy.deepcopy(model)
+            if save_path is not None:
+                torch.save(best_model, save_path)
             best_score = score
             epochs_without_improvement = 0
         else:
@@ -173,8 +176,9 @@ def get_example_input_batch(data_loader):
     return next(iter(data_loader))
 
 
-def get_example_inputs(data_loader):
-    device = get_device()
+def get_example_inputs(data_loader, device=None):
+    if device is None:
+        device = get_device()
     input_batch = get_example_input_batch(data_loader)
     return input_batch[0].to(device)
 

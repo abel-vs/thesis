@@ -40,7 +40,7 @@ def static_quantization(model, dataset, backend="fbgemm", fuse=False):
     torch.quantization.prepare(quantized_model, inplace=True)
 
     # Calibrate with the training set
-    calibrate(quantized_model, dataset.train_loader)
+    calibrate(quantized_model, dataset.train_loader, cap=100)
 
     # Convert the model to a quantized model
     torch.quantization.convert(quantized_model, inplace=True)
@@ -49,14 +49,19 @@ def static_quantization(model, dataset, backend="fbgemm", fuse=False):
 
 
 # Method that calibrates a model for quantization
-def calibrate(model, data_loader):
+def calibrate(model, data_loader, cap=None):
     device = general.get_device()
     model.to(device)
     model.eval()
     with torch.no_grad():
+        i = 0
         for data, _ in tqdm(data_loader, desc="Calibration"):
             data = data.to(device)
             model(data)
+            if cap is not None:
+                i += 1
+                if i >= cap:
+                    break
     print("Calibration complete.")
 
 

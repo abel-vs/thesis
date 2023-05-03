@@ -3,13 +3,16 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
 import metrics
 import torchvision as tv
+from torchvision import transforms
 from transformers import glue_convert_examples_to_features, glue_output_modes, glue_processors, AutoTokenizer
 from torchvision.datasets import CocoDetection, ImageNet, CIFAR10, MNIST
 from transformers import glue_tasks_num_labels, GlueDataset, SquadDataset, SquadDataTrainingArguments
 from torch.utils.data.sampler import SubsetRandomSampler
 import numpy as np
+from datasets import load_dataset
 
 DATA_DIR = "/workspace/volume/data"
+CACHE_DIR = "/workspace/volume/cache"
 
 """ General Dataset Class """
 
@@ -26,6 +29,33 @@ class DataSet:
     def set_transforms(self, transforms):
         self.train_loader.dataset.transform = transforms
         self.test_loader.dataset.transform = transforms
+
+from PIL import Image
+import io
+
+
+class ImageNetDataset(torch.utils.data.Dataset):
+    def __init__(self, ds, transform=None):
+        self.ds = ds
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx):
+        image = self.ds[idx]['image']
+        
+        # Convert grayscale image to RGB if necessary
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        if self.transform:
+            image = self.transform(image)
+        label = torch.tensor(self.ds[idx]['label'], dtype=torch.long)
+        return image, label
+
+
+
 
 
 """ General Variables """
@@ -55,8 +85,17 @@ def get_train_val_sampler(dataset, shuffle=False):
     return train_sampler, val_sampler
 
 
+""" Transforms """
+
+imagenet_transform = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
 
 """ Supported Dataloaders """
+
 def get_cifar_data_loaders():
     train_dataset = CIFAR10(DATA_DIR, train=True, download=True)
     test_dataset = CIFAR10(DATA_DIR, train=False, download=True)
@@ -76,12 +115,13 @@ def get_mnist_data_loaders():
     return train_loader, val_loader, test_loader
 
 def get_imagenet_loaders():
-    train_dataset = ImageNet(DATA_DIR, split='train')
-    val_dataset = ImageNet(DATA_DIR, split='val')
-    test_dataset = ImageNet(DATA_DIR, split='val')
-    train_sampler, val_sampler = get_train_val_sampler(train_dataset, shuffle=True)
-    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, **kwargs)
-    val_loader = DataLoader(val_dataset, batch_size=64, sampler=val_sampler, **kwargs)
+    dataset = load_dataset('imagenet-1k', data_dir=DATA_DIR, cache_dir=CACHE_DIR)
+    train_dataset = ImageNetDataset(dataset['train'], transform=imagenet_transform)
+    val_dataset = ImageNetDataset(dataset['validation'], transform=imagenet_transform)
+    # The test dataset is not available for ImageNet, all labels are -1, so using validation
+    test_dataset = ImageNetDataset(dataset['validation'], transform=imagenet_transform)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, **kwargs)
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=True, **kwargs)
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, **kwargs)
     return train_loader, val_loader, test_loader
 
@@ -106,7 +146,7 @@ def get_squad_data_loader(data_args, tokenizer, split, batch_size=64, shuffle=Tr
     dataset = SquadDataset(data_args, tokenizer=tokenizer, cache_dir=None, mode=split)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
 
-supported_datasets = {
+# supported_datasets = {
     # "ImageNet": DataSet(
     #     name="ImageNet",
     #     criterion=F.cross_entropy,
@@ -138,9 +178,8 @@ supported_datasets = {
     #         train_loader=get_squad_data_loader(data_args=SquadDataTrainingArguments(data_dir="../data/squad"), tokenizer=AutoTokenizer.from_pretrained("bert-base-uncased"), split=split, 
     #             batch_size=64, shuffle=True, **kwargs),
     #         test_loader=None,
-    #     )
-        
-}
+    #     )     
+# }
     
 
 
@@ -149,8 +188,9 @@ supported_datasets = {
 
 cifar_train_loader, cifar_val_loader, cifar_test_loader = get_cifar_data_loaders()
 mnist_train_loader, mnist_val_loader, mnist_test_loader = get_mnist_data_loaders()
+imagenet_train_loader, imagenet_val_loader, imagenet_test_loader = get_imagenet_loaders()
 
-supported_datasets.update({
+supported_datasets = {
     "MNIST": DataSet(
         name="MNIST",
         criterion=F.nll_loss,
@@ -167,6 +207,14 @@ supported_datasets.update({
         val_loader=cifar_val_loader,
         test_loader=cifar_test_loader
     ),
-})
+    "ImageNet": DataSet(
+        name="ImageNet",
+        criterion=F.cross_entropy,
+        metric=metrics.accuracy,
+        train_loader=imagenet_train_loader,
+        val_loader=imagenet_val_loader,
+        test_loader=imagenet_test_loader
+    ),
+}
 
 
