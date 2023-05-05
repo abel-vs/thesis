@@ -1,4 +1,6 @@
 import copy
+from enum import Enum
+from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.utils.prune as prune
@@ -30,6 +32,16 @@ def magnitude_pruning_global_unstructured(model, rate):
 
 
 """ STRUCTURED PRUNING """
+
+
+class PruningType(str, Enum):
+    Random = "random"
+    L1 = "l1"
+    LAMP = "lamp"
+    SLIM = "slim"
+    GroupNorm = "group_norm"
+
+    
 
 # Method that gets first and last layer
 # TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
@@ -68,35 +80,78 @@ def get_layers_not_to_prune(model):
     return layers_not_to_prune
 
 
-def magnitude_pruning_structured(model, dataset: DataSet, sparsity: float, fineTune=False, iterative_steps=3, layers = None):
-    example_inputs = general.get_example_inputs(dataset.train_loader)
+# Method that estimates the required channel sparsity to reach a target global sparsity 
+def calculate_channel_sparsity(model: nn.Module, target_global_sparsity: float) -> List[float]:
+    total_parameters = 0
+    total_conv_parameters = 0
 
-    # 0. importance criterion for parameter selections
-    imp = tp.importance.MagnitudeImportance(p=2, group_reduction='mean')
+    for layer in model.modules():
+        if isinstance(layer, (nn.Conv2d, nn.Linear)):
+            layer_parameters = torch.prod(torch.tensor(layer.weight.size())).item()
+            total_parameters += layer_parameters
+
+            if isinstance(layer, nn.Conv2d):
+                total_conv_parameters += layer_parameters
+
+    target_conv_sparsity = (1 - (1 - target_global_sparsity) * total_parameters / total_conv_parameters)
+
+    channel_sparsity = []
+    for layer in model.modules():
+        if isinstance(layer, nn.Conv2d):
+            num_channels = layer.out_channels
+            num_channels_to_prune = int(num_channels * target_conv_sparsity)
+            layer_channel_sparsity = num_channels_to_prune / num_channels
+            channel_sparsity.append(layer_channel_sparsity)
+
+    return channel_sparsity
+
+
+# Method that constructs a pruner object
+def get_pruner(model, example_inputs, type, ignored_layers, settings):
+    if type == "random":
+        imp = tp.importance.RandomImportance()
+        pruner =  tp.pruner.MagnitudePruner
+    elif type == "l1":
+        imp = tp.importance.MagnitudeImportance(p=1)
+        pruner =  tp.pruner.MagnitudePruner
+    elif type == "lamp":
+        imp = tp.importance.LAMPImportance(p=2)
+        pruner =  tp.pruner.MagnitudePruner
+    elif type == "slim":
+        imp = tp.importance.BNScaleImportance()
+        pruner =  tp.pruner.MagnitudePruner
+    elif type == "group_norm":
+        imp = tp.importance.GroupNormImportance(p=2)
+        pruner =  tp.pruner.GroupNormPruner
+    else:
+        raise NotImplementedError
+
+    return pruner(model, 
+                  example_inputs, 
+                  importance=imp, 
+                  iterative_steps=settings["iterative_steps"], 
+                  ch_sparsity=settings["sparsity"], 
+                  ignored_layers=ignored_layers)
+    
+
+
+def channel_pruning(model, dataset: DataSet, type: tp.pruner.MetaPruner, sparsity: float, fineTune=False, iterative_steps=3, prunable_layers = None):
+    example_inputs = general.get_example_inputs(dataset.train_loader)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
     # 1. ignore some layers that should not be pruned, e.g., the final classifier layer.
-    if layers is None:
+    if prunable_layers is None:
         ignored_layers = get_layers_not_to_prune(model)
     else:
-        ignored_layers = get_layers_not_to_prune(layers)
+        ignored_layers = get_layers_not_to_prune(prunable_layers)
 
     # 2. Pruner initialization
-    pruner = tp.pruner.MagnitudePruner(
-        model,
-        example_inputs,
-        # If False, a uniform sparsity will be assigned to different layers.
-        global_pruning=False,
-        importance=imp,  # importance criterion for parameter selection
-        # the number of iterations to achieve target sparsity
-        iterative_steps=iterative_steps,
-        ch_sparsity=sparsity,
-        ignored_layers=ignored_layers,
-    )
+    pruner = get_pruner(model, example_inputs, type, ignored_layers, {"iterative_steps": iterative_steps, "sparsity": sparsity})
 
+    # 3. Pruning
     for i in range(iterative_steps):
-        # pruner.step will remove some channels from the model with least importance
-        pruner.step()
+        pruner.step() # Removes the least important channels from the model
         if fineTune:
-            general.train(model, dataset)
+            general.train(model, dataset, optimizer=optimizer)
 
     return model

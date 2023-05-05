@@ -94,13 +94,21 @@ imagenet_transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
+cifar10_transform = transforms.Compose([
+    transforms.Resize(256),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomCrop(224, padding=4),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
 """ Supported Dataloaders """
 
 def get_cifar_data_loaders():
-    train_dataset = CIFAR10(DATA_DIR, train=True, download=True)
-    test_dataset = CIFAR10(DATA_DIR, train=False, download=True)
+    train_dataset = CIFAR10(DATA_DIR, train=True, download=True, transform=cifar10_transform)
+    test_dataset = CIFAR10(DATA_DIR, train=False, download=True, transform=cifar10_transform)
     train_sampler, val_sampler = get_train_val_sampler(train_dataset, shuffle=False)
-    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, **kwargs)
+    train_loader = DataLoader(train_dataset, batch_size=4, sampler=train_sampler, **kwargs)
     val_loader = DataLoader(train_dataset, batch_size=64, sampler=val_sampler, **kwargs)
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, **kwargs)
     return train_loader, val_loader, test_loader

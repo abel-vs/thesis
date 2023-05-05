@@ -136,7 +136,7 @@ def distillation_train_loop(
 # Method that creates a student model based on the teacher model
 def create_student_model(teacher_model, dataset: DataSet, fineTune=True):
     teacher_model = copy.deepcopy(teacher_model)
-    prune.magnitude_pruning_structured(
+    prune.channel_pruning(
         teacher_model, dataset, sparsity=0.5, fineTune=fineTune)
     return teacher_model
 

@@ -208,7 +208,7 @@ def compress_model(model, dataset, compression_actions, settings):
         if action["type"] == "pruning":
             plot.print_header("PRUNING STARTED")
             action_settings = action["settings"]
-            compressed_model = prune.magnitude_pruning_structured(compressed_model, dataset, sparsity=action_settings.get(
+            compressed_model = prune.channel_pruning(compressed_model, dataset, sparsity=action_settings.get(
                 "sparsity"), fineTune=action_settings.get("fineTune", False), strategy="NO_CONV")
 
         print("Compressed Model", compressed_model)
