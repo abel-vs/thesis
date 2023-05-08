@@ -1,8 +1,12 @@
+from enum import Enum
 import torch
+import torch.nn as nn
 
 from compression_models import CompressionAction, CompressionType
 
-PRUNE_PERCENTAGE = 0.5
+class ModelCategory(str, Enum):
+    cnn = "cnn"
+    transformer = "transformer"
 
 
 def get_modules(model):
@@ -34,58 +38,41 @@ def get_conv_layers(model):
     return conv_layers
 
 
-# Method that ranks the filters of convolutional layers according to their L1-norm
-def rank_filters(model, data_loader, device):
-    # Get the convolutional layers of the model
-    conv_layers = get_conv_layers(model)
-
-    # For each convolutional layer
-    for layer in conv_layers:
-        # Get the layer's weight
-        weight = layer.weight.data
-
-        # Get the L1-norm of the layer's weight
-        l1_norm = torch.sum(weight.abs(), dim=(1, 2, 3))
-
-        # Get the number of filters
-        num_filters = weight.shape[0]
-
-        # Get the number of filters to prune
-        num_filters_to_prune = int(num_filters * PRUNE_PERCENTAGE)
-
-        # Get the indices of the filters to prune
-        _, filter_indices_to_prune = torch.topk(l1_norm, num_filters_to_prune)
-
-        # Set the filters to prune to zero
-        weight[filter_indices_to_prune, :, :, :] = 0
-
-    return model
-
 
 def detect_model_category(model):
+    is_transformer = any(isinstance(layer, (nn.Transformer, nn.TransformerEncoder, nn.TransformerDecoder)) for layer in model.modules())
+    is_cnn = any(isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d)) for layer in model.modules())
 
-    # Method that analyzes the given model and returns suggested compression actions.
-    # TODO: Implement the analyze method
+    if is_transformer:
+        return ModelCategory.transformer
+    elif is_cnn:
+        return ModelCategory.cnn
+    else:
+        return None
 
 
 def analyze(
-    model_state,
-    model_architecture,
-    compression_goal,
+    model, 
+    dataset, 
+    type,
     compression_target,
-    performance_metric,
-    perfomance_target,
+    settings
 ):
 
     compression_actions = []
 
-    if compression_goal == "Model Size":
+    resources_available = False
+
+    if type == "performance":
         # Pruning of fully connected layers
         pass
-    elif compression_goal == "Inference Time":
+    if type == "size":
+        # Pruning of fully connected layers
+        pass
+    elif type == "time":
         # Pruning of filters
         pass
-    elif compression_goal == "Energy Usage":
+    elif type == "computations":
         # Focus on making it fit on a CPU
         compression_actions.append(
             CompressionAction(
@@ -93,19 +80,20 @@ def analyze(
             )
         )
     else:
-        # Throw exception, shouldn't happen
-        pass
+        raise Exception("Unknown compression type")
 
-    compression_actions.append(
-        CompressionAction(type=CompressionType.distillation, name="Logits Distillation", settings={
-                          "performance_target": perfomance_target,
-                          "compression_target": compression_target})
-    )
+    
     compression_actions.append(
         CompressionAction(type=CompressionType.pruning,
                           name="Magnitude Pruning", settings={
-                              "performance_target": perfomance_target,
+                              "performance_target": compression_target,
                               "compression_target": compression_target})
     ),
+
+    compression_actions.append(
+        CompressionAction(type=CompressionType.distillation, name="Logits Distillation", settings={
+                          "performance_target": compression_target,
+                          "compression_target": compression_target})
+    )
 
     return compression_actions

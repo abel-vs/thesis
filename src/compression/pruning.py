@@ -8,12 +8,19 @@ import torch_pruning as tp
 import general
 from dataset_models import DataSet
 
+
+class PruningTechnique(str, Enum):
+    Random = "random"
+    L1 = "l1"
+    LAMP = "lamp"
+    SLIM = "slim"
+    GroupNorm = "group_norm"
+
+
 """ UNSTRUCTURED PRUNING """
 
 # Method that randomly prunes a module by a given rate from 0% to 100%
-
-
-def random_pruning(model, rate):
+def unstructured_random_pruning(model, rate):
     for module in model.children():
         prune.random_unstructured(module, name="weight", amount=rate)
         prune.remove(module, "weight")
@@ -21,9 +28,7 @@ def random_pruning(model, rate):
     return model
 
 # Method that randomly prunes a module by a given rate from 0% to 100%
-
-
-def magnitude_pruning_global_unstructured(model, rate):
+def unstructured_magnitude_pruning(model, rate):
     for module in model.children():
         prune.l1_unstructured(module, name="weight", amount=rate)
         prune.remove(module, "weight")
@@ -32,16 +37,6 @@ def magnitude_pruning_global_unstructured(model, rate):
 
 
 """ STRUCTURED PRUNING """
-
-
-class PruningType(str, Enum):
-    Random = "random"
-    L1 = "l1"
-    LAMP = "lamp"
-    SLIM = "slim"
-    GroupNorm = "group_norm"
-
-    
 
 # Method that gets first and last layer
 # TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
@@ -134,10 +129,19 @@ def get_pruner(model, example_inputs, type, ignored_layers, settings):
                   ignored_layers=ignored_layers)
     
 
+# Method that applies channel pruning using a given technique
+def channel_pruning(model, dataset: DataSet, type: PruningTechnique, sparsity: float, fineTune=False, iterative_steps=3, prunable_layers = None, optimizer=None, inPlace=False):
+    device = general.get_device()
+    if not inPlace:
+        model = copy.deepcopy(model)
+    model.to(device)
+    example_inputs = general.get_example_inputs(dataset.train_loader).to(device)
 
-def channel_pruning(model, dataset: DataSet, type: tp.pruner.MetaPruner, sparsity: float, fineTune=False, iterative_steps=3, prunable_layers = None):
-    example_inputs = general.get_example_inputs(dataset.train_loader)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    # TODO: optimizer should be able to be created in a smart way
+    if optimizer is None:
+        learning_rate = 0.1 * sparsity/iterative_steps
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
     # 1. ignore some layers that should not be pruned, e.g., the final classifier layer.
     if prunable_layers is None:
@@ -153,5 +157,6 @@ def channel_pruning(model, dataset: DataSet, type: tp.pruner.MetaPruner, sparsit
         pruner.step() # Removes the least important channels from the model
         if fineTune:
             general.train(model, dataset, optimizer=optimizer)
+            # general.validate(model, dataset)
 
     return model

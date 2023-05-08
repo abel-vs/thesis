@@ -1,4 +1,5 @@
 import copy
+from enum import Enum
 import torch
 from tqdm import tqdm
 import torch.nn.functional as F
@@ -7,6 +8,11 @@ import src.compression.pruning as prune
 import general
 import plot
 from dataset_models import DataSet
+
+class DistillationTechnique(str, Enum):
+    SoftTarget = "soft_target"
+    HardTarget = "hard_target"
+    CombinedLoss = "combined_loss"
 
 
 def soft_target_distillation(teacher, student, dataset, distil_criterion, optimizer):
@@ -31,6 +37,37 @@ def soft_target_distillation(teacher, student, dataset, distil_criterion, optimi
 
         # Compute the loss and gradient
         distill_loss = distil_criterion(student_output, teacher_output.detach())
+        distill_loss.backward()
+
+        # Update the student model's parameters
+        optimizer.step()
+
+    return distill_loss
+
+
+def hard_target_distillation(teacher, student, dataset, distil_criterion, optimizer):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    teacher.eval()  # Set teacher model to evaluation mode
+    student.train()  # Set student model to training mode
+
+    for data, _ in tqdm(dataset.train_loader, desc="Distillation Training"):
+        # Move data to the appropriate device
+        data = data.to(device)
+
+        # Compute the hard target labels from the teacher model
+        with torch.no_grad():
+            teacher_output = teacher(data)
+            _, hard_target_labels = torch.max(teacher_output, dim=1)
+
+        # Compute the output probabilities of the student model
+        student_output = student(data)
+
+        # Zero the gradients before computing the loss
+        optimizer.zero_grad()
+
+        # Compute the loss and gradient
+        distill_loss = distil_criterion(student_output, hard_target_labels.detach())
         distill_loss.backward()
 
         # Update the student model's parameters
@@ -89,33 +126,40 @@ def distillation_train_loop(
     distil_criterion,
     optimizer,
     epochs=1,
-    threshold=None,
+    patience=3,
+    target=None,
+    save_path=None,
 ):
     device = general.get_device()
     teacher.to(device)
     student.to(device)
 
     # If a threshold is specified, train the student model until the threshold is reached or the score decreases
-    if threshold is not None:
-        previous_score = 0
-        while True:
+    if target is not None:
+        best_score = 0
+        score = 0
+        epochs_without_improvement = 0
+
+        while score < target and epochs_without_improvement < patience:
             # Validate the student model
-            validation_metrics = general.validate(student, dataset)
-            validation_score = validation_metrics[0]
+            metrics = general.validate(student, dataset)
+            score = metrics[1]
 
             # If the score is above the threshold, stop training
-            if validation_score > threshold:
+            if score > target:
                 print("Stopped training because threshold ({}) was reached: {}".format(
-                    threshold, validation_score))
+                    target, score))
                 break
 
             # If the score is decreasing, stop training
-            if validation_score < previous_score:
-                print("Stopped training because score started decreasing: from {} to {}".format(
-                    previous_score, validation_score))
-                break
+            if score > best_score:
+                best_model = copy.deepcopy(student)
+                if save_path is not None:
+                    torch.save(best_model, save_path)
+                best_score = score
+                epochs_without_improvement = 0
             else:
-                previous_score = validation_score
+                epochs_without_improvement += 1
 
             # Train the student model
             distil_technique(teacher, student, dataset, distil_criterion, optimizer)
@@ -142,7 +186,7 @@ def create_student_model(teacher_model, dataset: DataSet, fineTune=True):
 
 
 # Method that performs the whole distillation procedure
-def perform_distillation(model, dataset: DataSet, student_model=None,  settings: dict = None):
+def perform_distillation(model, dataset: DataSet, student_model=None,  settings: dict = {}):
 
     # Extract settings
     performance_target = settings.get("performance_target", None)
@@ -157,7 +201,7 @@ def perform_distillation(model, dataset: DataSet, student_model=None,  settings:
         plot.print_header()
 
     # TODO: Find intelligent way to set the following properties
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+    optimizer = optim.SGD(student_model.parameters(), lr=0.01, momentum=0.5)
 
     print("\n")
     plot.print_header("Performing distillation")
@@ -169,7 +213,7 @@ def perform_distillation(model, dataset: DataSet, student_model=None,  settings:
         distil_criterion,
         optimizer,
         epochs=epochs,
-        threshold=performance_target,
+        target=performance_target,
     )
     plot.print_header()
 

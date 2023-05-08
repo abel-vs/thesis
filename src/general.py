@@ -1,4 +1,5 @@
 import itertools
+from typing import List
 import torch
 import inspect
 from tqdm import tqdm
@@ -12,6 +13,7 @@ import plot
 import time
 
 from dataset_models import DataSet
+from src.compression_models import CompressionAction, DistillationAction, PruningAction, QuantizationAction
 
 
 # General train function
@@ -25,7 +27,7 @@ def train(model, dataset: DataSet, optimizer=None, device=None):
 
     if optimizer == None:
         # TODO: Build automated optimizer constructor
-        optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
 
     model.train()
     st = time.time()
@@ -104,17 +106,21 @@ def test(model, dataset , validate=False, device=None):
     return test_loss, test_score, duration, batch_duration, data_duration
 
 
+# General validation method
 def validate(model, dataset, device=None):
     return test(model, dataset, validate=True, device=device)
 
 # General finetune method
-def finetune(model, dataset, target, max_it=None, patience=3, save_path=None, device=None):
-    score, best_score, i = 0, 0, 1
-    best_model = copy.deepcopy(model)
+def finetune(model, dataset, target, epochs=None, patience=3, save_path=None, device=None, optimizer=None):
     epochs_without_improvement = 0
+    iterations = 0
+
+    start_metrics = validate(model, dataset, device=device)
+    score = start_metrics[1]
+    best_score = score
 
     while score < target and epochs_without_improvement < patience:
-        train(model, dataset, device=device)
+        train(model, dataset, optimizer=optimizer, device=device)
         metrics = validate(model, dataset, device=device)
         score = metrics[1]
 
@@ -127,18 +133,19 @@ def finetune(model, dataset, target, max_it=None, patience=3, save_path=None, de
         else:
             epochs_without_improvement += 1
 
-        if max_it is not None and i >= max_it:
+        iterations += 1
+
+        if epochs is not None and iterations >= epochs:
             print("Maximum number of iterations reached")
             break
 
-        i += 1
 
     if epochs_without_improvement >= patience:
         print("Finetuning stopped due to early stopping with patience = {}".format(patience))
     else:
         print("Finetuning stopped due to reaching the target score")
 
-    print("Finetuning finished after {} iterations".format(i))
+    print("Finetuning finished after {} iterations".format(iterations))
     print("Best score: {:.4f}".format(best_score))
     return best_model
 
@@ -187,29 +194,27 @@ def save_model(model, path):
     torch.save(model.state_dict(), path)
 
 
-def compress_model(model, dataset, compression_actions, settings):
+def compress_model(model, dataset, compression_actions: List[CompressionAction]):
     """Main method for compressing a model via API"""
-
-    print("Settings: ", settings)
-    performance_target = settings.performance_target/100
-    compression_target = settings.compression_target/100
-
+    
     # Compress the model
     compressed_model = copy.deepcopy(model)
-    print("Compression Actions:", compression_actions)
+    print("Compression Actions:", (c.name for c in compression_actions))
     for action in compression_actions:
-        if action["type"] == "distillation":
+        if type(action) == PruningAction:
+            plot.print_header("PRUNING STARTED")
+            compressed_model = prune.channel_pruning(compressed_model, dataset, action.technique, action.sparsity, **action.settings)
+            # action_settings = action["settings"]
+            # compressed_model = prune.channel_pruning(compressed_model, dataset, sparsity=action_settings.get(
+            #     "sparsity"), fineTune=action_settings.get("fineTune", False), strategy="NO_CONV")
+        
+        if type(action) == DistillationAction:
             plot.print_header("DISTILLATION STARTED")
-            compressed_model = distil.perform_distillation(
-                compressed_model, dataset, action["settings"])
-        if action["type"] == "quantization":
+            compressed_model = distil.perform_distillation(model, dataset, compressed_model,  action.settings)
+            
+        if type(action) ==  QuantizationAction:
             plot.print_header("QUANTIZATION STARTED")
             compressed_model = quant.dynamic_quantization(compressed_model)
-        if action["type"] == "pruning":
-            plot.print_header("PRUNING STARTED")
-            action_settings = action["settings"]
-            compressed_model = prune.channel_pruning(compressed_model, dataset, sparsity=action_settings.get(
-                "sparsity"), fineTune=action_settings.get("fineTune", False), strategy="NO_CONV")
 
         print("Compressed Model", compressed_model)
 

@@ -71,7 +71,6 @@ def get_results(model, dataset: DataSet, device=None):
     metrics = get_metrics(model, dataset, device=device)
 
     macs, params = count_ops_and_params(model, metrics["example_input"])
-
     results = {
         "loss": metrics["loss"],
         "score": metrics["score"],

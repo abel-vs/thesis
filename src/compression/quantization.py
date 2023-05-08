@@ -1,10 +1,14 @@
 import copy
+from enum import Enum
 import torch
 import torch.nn as nn
 from torch.quantization import QuantStub, DeQuantStub
 from tqdm import tqdm
 import general
 
+class QuantizationTechnique(str, Enum):
+    Dynamic = "dynamic"
+    Static = "static"
 
 class QuantizedModelWrapper(nn.Module):
     def __init__(self, model):
@@ -69,8 +73,7 @@ def fuse_modules(model):
     modules_to_fuse = get_modules_to_fuse(model)
     torch.quantization.fuse_modules(model, modules_to_fuse, inplace=True)
 
-# Method to find modules to fuse
-# Uses a depth-first search approach to traverse the model's hierarchy and identify layers to fuse
+
 def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
     # Initialize layers_to_fuse as an empty list if not provided
     if modules_to_fuse is None:
@@ -86,13 +89,13 @@ def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
             # If it's the first layer or not a direct successor of the previous layer,
             # create a new list to store the fusion candidate layers
             if (len(modules_to_fuse) == 0) or (modules_to_fuse[-1][-1] != layer_name):
-                modules_to_fuse.append([layer])
+                modules_to_fuse.append([layer_name])
 
         # Check if the current layer is a BatchNorm2d or ReLU layer
         if isinstance(layer, nn.BatchNorm2d) or isinstance(layer, nn.ReLU):
             # If there are layers in layers_to_fuse, append the current layer to the last group
             if modules_to_fuse:
-                modules_to_fuse[-1].append(layer)
+                modules_to_fuse[-1].append(layer_name)
 
         # Recursively call find_layers_to_fuse for child layers, updating the prefix
         get_modules_to_fuse(layer, modules_to_fuse, prefix=f"{layer_name}.")

@@ -30,9 +30,8 @@ class DataSet:
         self.train_loader.dataset.transform = transforms
         self.test_loader.dataset.transform = transforms
 
-from PIL import Image
-import io
 
+""" Supported Datasets Classes """
 
 class ImageNetDataset(torch.utils.data.Dataset):
     def __init__(self, ds, transform=None):
@@ -53,9 +52,6 @@ class ImageNetDataset(torch.utils.data.Dataset):
             image = self.transform(image)
         label = torch.tensor(self.ds[idx]['label'], dtype=torch.long)
         return image, label
-
-
-
 
 
 """ General Variables """
