@@ -1,10 +1,8 @@
 
 import torch.nn.functional as F
-
 from enum import Enum
-from src.compression.distillation import DistillationTechnique
-from src.compression.pruning import PruningTechnique
-from src.compression.quantization import QuantizationTechnique
+from src.models.techniques import DistillationTechnique, PruningTechnique, QuantizationTechnique
+
 
 class CompressionType(str, Enum):
     pruning = "pruning"

@@ -1,56 +1,18 @@
 experiments:
-  - name: "VGG16_ImageNet"
-    model_type: "CNN"
-    architecture: "vgg16"
-    dataset: "ImageNet"
-    performance_target: 0.9
-    compression_type: "inference_time"
-    compression_target: 0.5
-
-  - name: "ResNet50_ImageNet"
-    model_type: "CNN"
-    architecture: "resnet50"
-    dataset: "ImageNet"
-    performance_target: 0.9
-    compression_type: "storage_size"
-    compression_target: 0.5
-
-  - name: "EfficientNet_ImageNet"
-    model_type: "CNN"
-    architecture: "efficientnet-b0"
-    dataset: "ImageNet"
-    performance_target: 0.9
-    compression_type: "computations"
-    compression_target: 0.5
-
-  - name: "VGG16_CIFAR10"
-    model_type: "CNN"
-    architecture: "vgg16"
+  - name: "VGG_CIFAR_Performance"
+    model_path: "/workspace/volume/models/vgg16_cifar10.pt"
     dataset: "CIFAR-10"
-    performance_target: 0.9
-    compression_type: "inference_time"
-    compression_target: 0.5
+    type: "performance"
+    target: 90
 
-  - name: "BERT_SQuAD"
-    model_type: "Transformer"
-    architecture: "bert-base-uncased"
-    dataset: "SQuAD"
-    performance_target: 0.9
-    compression_type: "inference_time"
-    compression_target: 0.5
-
-  - name: "GPT2_GLUE"
-    model_type: "Transformer"
-    architecture: "gpt2"
-    dataset: "GLUE"
-    performance_target: 0.9
-    compression_type: "storage_size"
-    compression_target: 0.5
-
-  - name: "T5_SQuAD"
-    model_type: "Transformer"
-    architecture: "t5-small"
-    dataset: "SQuAD"
-    performance_target: 0.9
-    compression_type: "computations"
-    compression_target: 0.5
+  - name: "ResNet_CIFAR_Performance"
+    model_path: "/workspace/volume/models/resnet_cifar10.pt"
+    dataset: "CIFAR-10"
+    type: "performance"
+    target: 90
+  
+  - name: "EfficientNet_CIFAR_Performance"
+    model_path: "/workspace/volume/models/efficientnet_cifar10.pt"
+    dataset: "CIFAR-10"
+    type: "performance"
+    target: 90

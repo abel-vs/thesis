@@ -6,9 +6,6 @@ from torch.quantization import QuantStub, DeQuantStub
 from tqdm import tqdm
 import general
 
-class QuantizationTechnique(str, Enum):
-    Dynamic = "dynamic"
-    Static = "static"
 
 class QuantizedModelWrapper(nn.Module):
     def __init__(self, model):

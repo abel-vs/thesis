@@ -1,6 +1,20 @@
 import torch
-import torchvision
-from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+import yaml
+import logging
+import os
+import sys
+import json
+from src.compress import compress_model
+sys.path.append('..')
+sys.path.append('../src')
+
+import src.models.dataset_models as data
+import src.evaluation as eval
+import src.general as general
+import src.analysis as analysis
+
+
+SAVE_PATH = 'results/'
 
 class ExperimentManager:
     """
@@ -10,64 +24,99 @@ class ExperimentManager:
     def __init__(self, experiment_config):
         self.config = experiment_config
 
+    def setup_logging(self):
+        log_folder = os.path.join(SAVE_PATH, self.config["name"])
+        os.makedirs(log_folder, exist_ok=True)
+
+        log_filename = f"{self.get_experiment_name()}.log"
+        log_filepath = os.path.join(log_folder, log_filename)
+
+        logging.basicConfig(level=logging.INFO,
+                            format='%(asctime)s - %(message)s',
+                            datefmt='%H:%M:%S',
+                            handlers=[logging.FileHandler(log_filepath), logging.StreamHandler()])
+
     def load_model(self):
-        model_type = self.config['model_type']
-        architecture = self.config['architecture']
-        task = self.config['task']
-
-        if model_type == 'CNN':
-            model = CNNModel(architecture, task)
-        elif model_type == 'Transformer':
-            model = TransformerModel(architecture, task)
-
+        model = torch.load(self.config['model_path'])
         return model
 
     def load_data(self):
-        # Add your data loading logic here, e.g. DataLoader in PyTorch
-        pass
+        return data.supported_datasets[self.config['dataset']]
 
-    def train(self, model, data):
-        # Add your training logic here
-        pass
-
-    def compress(self, model):
-        # Add your compression logic here
-        pass
+    def compress(self, model, dataset):
+        compression_actions = analysis.analyze(model, dataset, type="size", compression_target=self.config["target"], settings={})
+        compressed_model = compress_model(model, dataset, compression_actions)
+        return compressed_model
 
     def evaluate(self, model, data):
-        # Add your evaluation logic here
-        pass
+        metrics = eval.get_metrics(model, data)
+        # Remove model and example_iput from metrics
+        del metrics["model"] 
+        del metrics["example_input"]
+        return metrics
+
+    def get_experiment_name(self):
+        name = self.config["name"]
+        target = self.config["target"]
+        return f"{name}_{target:.0f}"
+
+    def save_model(self, model):
+        foldername = self.config["name"]
+        filename = self.get_experiment_name() +".pt"
+        torch.save(model, os.path.join(SAVE_PATH, foldername, filename))
 
     def save_results(self, results):
-        # Add your result saving logic here, e.g. using pandas to save as CSV
-        pass
+        foldername = self.config["name"]
+        filename = self.get_experiment_name() +".json"
+        with open(os.path.join(SAVE_PATH, foldername, filename), 'w') as f:
+            json.dump(results, f)
 
     def run_experiment(self):
+        self.setup_logging()
+        
+        logging.info('Loading model...')
         model = self.load_model()
-        data = self.load_data()
-        self.train(model, data)
-        self.compress(model)
-        results = self.evaluate(model, data)
-        self.save_results(results)
+        
+        logging.info('Loading dataset...')
+        dataset = self.load_data()
+        
+        logging.info('Compressing model...')
+        compressed_model = self.compress(model, dataset)
+        
+        logging.info('Saving compressed model...')
+        self.save_model(compressed_model)
+        
+        logging.info('Evaluating compressed model...')
+        compressed_results = self.evaluate(compressed_model, dataset)
+        
+        logging.info('Saving evaluation results...')
+        self.save_results(compressed_results)
+        
+        logging.info('Experiment completed successfully')
 
-class CNNModel:
-    def __init__(self, architecture):
-        self.model = torchvision.models.__dict__[architecture](pretrained=True)
 
-from transformers import (
-    AutoModelForSequenceClassification,
-    AutoModelForTokenClassification,
-    AutoModelForQuestionAnswering,
-)
+def load_yaml_file(file_path):
+    with open(file_path, 'r') as file:
+        try:
+            data = yaml.safe_load(file)
+            return data
+        except yaml.YAMLError as error:
+            print(f"Error parsing YAML file: {error}")
+            return None
+        
 
-class TransformerModel:
-    def __init__(self, architecture, task):
-        self.tokenizer = AutoTokenizer.from_pretrained(architecture)
-        if task == "sequence_classification":
-            self.model = AutoModelForSequenceClassification.from_pretrained(architecture)
-        elif task == "token_classification":
-            self.model = AutoModelForTokenClassification.from_pretrained(architecture)
-        elif task == "question_answering":
-            self.model = AutoModelForQuestionAnswering.from_pretrained(architecture)
-        else:
-            raise ValueError(f"Unknown task type: {task}")
+def main():
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
+
+    config = load_yaml_file("config.yml")
+    experiments = config["experiments"]
+
+    for experiment_config in experiments:
+        print("Running experiment: ", experiment_config["name"])
+        experiment = ExperimentManager(experiment_config)
+        experiment.run_experiment()
+
+
+if __name__ == "__main__":
+    main()

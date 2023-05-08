@@ -2,7 +2,8 @@ from enum import Enum
 import torch
 import torch.nn as nn
 
-from compression_models import CompressionAction, CompressionType
+from src.models.compression_actions import CompressionAction, CompressionType, DistillationAction, PruningAction, QuantizationAction
+from src.models.techniques import DistillationTechnique, PruningTechnique
 
 class ModelCategory(str, Enum):
     cnn = "cnn"
@@ -64,7 +65,6 @@ def analyze(
     resources_available = False
 
     if type == "performance":
-        # Pruning of fully connected layers
         pass
     if type == "size":
         # Pruning of fully connected layers
@@ -75,23 +75,20 @@ def analyze(
     elif type == "computations":
         # Focus on making it fit on a CPU
         compression_actions.append(
-            CompressionAction(
-                type=CompressionType.quantization, name="INT-8 Dynamic Quantization"
-            )
+            QuantizationAction(name="INT-8 Dynamic Quantization")
         )
     else:
         raise Exception("Unknown compression type")
 
     
     compression_actions.append(
-        CompressionAction(type=CompressionType.pruning,
-                          name="Magnitude Pruning", settings={
+        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.5, settings={
                               "performance_target": compression_target,
                               "compression_target": compression_target})
     ),
 
     compression_actions.append(
-        CompressionAction(type=CompressionType.distillation, name="Logits Distillation", settings={
+        DistillationAction(name="Logits Distillation", technique=DistillationTechnique.SoftTarget,  settings={
                           "performance_target": compression_target,
                           "compression_target": compression_target})
     )

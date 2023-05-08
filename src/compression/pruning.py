@@ -1,20 +1,13 @@
 import copy
-from enum import Enum
 from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.utils.prune as prune
 import torch_pruning as tp
 import general
-from dataset_models import DataSet
+from src.models.dataset_models import DataSet
+from src.models.techniques import PruningTechnique
 
-
-class PruningTechnique(str, Enum):
-    Random = "random"
-    L1 = "l1"
-    LAMP = "lamp"
-    SLIM = "slim"
-    GroupNorm = "group_norm"
 
 
 """ UNSTRUCTURED PRUNING """
@@ -130,7 +123,7 @@ def get_pruner(model, example_inputs, type, ignored_layers, settings):
     
 
 # Method that applies channel pruning using a given technique
-def channel_pruning(model, dataset: DataSet, type: PruningTechnique, sparsity: float, fineTune=False, iterative_steps=3, prunable_layers = None, optimizer=None, inPlace=False):
+def channel_pruning(model, dataset: DataSet, type: PruningTechnique, sparsity: float, fineTune=False, iterative_steps=3, prunable_layers = None, optimizer=None, inPlace=False, **kwargs):
     device = general.get_device()
     if not inPlace:
         model = copy.deepcopy(model)

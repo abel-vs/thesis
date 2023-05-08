@@ -19,7 +19,7 @@ import torchvision
 import torch.nn.functional as F
 import metrics
 import evaluation as eval
-from dataset_models import supported_datasets
+from src.models.dataset_models import supported_datasets
 
 HOST = "127.0.0.1"
 PORT = 8000

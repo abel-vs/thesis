@@ -7,12 +7,7 @@ import torch.optim as optim
 import src.compression.pruning as prune
 import general
 import plot
-from dataset_models import DataSet
-
-class DistillationTechnique(str, Enum):
-    SoftTarget = "soft_target"
-    HardTarget = "hard_target"
-    CombinedLoss = "combined_loss"
+from src.models.dataset_models import DataSet
 
 
 def soft_target_distillation(teacher, student, dataset, distil_criterion, optimizer):
@@ -147,7 +142,7 @@ def distillation_train_loop(
 
             # If the score is above the threshold, stop training
             if score > target:
-                print("Stopped training because threshold ({}) was reached: {}".format(
+                print("Stopped training because target ({}) was reached: {}".format(
                     target, score))
                 break
 
@@ -186,7 +181,7 @@ def create_student_model(teacher_model, dataset: DataSet, fineTune=True):
 
 
 # Method that performs the whole distillation procedure
-def perform_distillation(model, dataset: DataSet, student_model=None,  settings: dict = {}):
+def perform_distillation(model, dataset: DataSet, student_model=None,  settings: dict = {}, **kwargs):
 
     # Extract settings
     performance_target = settings.get("performance_target", None)
@@ -203,8 +198,6 @@ def perform_distillation(model, dataset: DataSet, student_model=None,  settings:
     # TODO: Find intelligent way to set the following properties
     optimizer = optim.SGD(student_model.parameters(), lr=0.01, momentum=0.5)
 
-    print("\n")
-    plot.print_header("Performing distillation")
     compressed_model = distillation_train_loop(
         model,
         student_model,
