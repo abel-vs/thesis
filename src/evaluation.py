@@ -3,7 +3,7 @@ import torch
 import general
 import torch.nn.functional as F
 from op_counter import count_ops_and_params
-from src.models.dataset_models import DataSet
+from src.interfaces.dataset_models import DataSet
 
 # Method that returns the model size in MB
 def get_size(model):

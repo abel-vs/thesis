@@ -11,8 +11,7 @@ import copy
 import torch.optim as optim
 import plot
 import time
-from src.models.compression_actions import CompressionAction, DistillationAction, PruningAction, QuantizationAction
-from src.models.dataset_models import DataSet
+from src.interfaces.dataset_models import DataSet
 
 
 # General train function
@@ -117,6 +116,7 @@ def finetune(model, dataset, target, epochs=None, patience=3, save_path=None, de
     start_metrics = validate(model, dataset, device=device)
     score = start_metrics[1]
     best_score = score
+    best_model = copy.deepcopy(model)
 
     while score < target and epochs_without_improvement < patience:
         train(model, dataset, optimizer=optimizer, device=device)

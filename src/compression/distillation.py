@@ -1,5 +1,6 @@
 import copy
 from enum import Enum
+import logging
 import torch
 from tqdm import tqdm
 import torch.nn.functional as F
@@ -7,7 +8,7 @@ import torch.optim as optim
 import src.compression.pruning as prune
 import general
 import plot
-from src.models.dataset_models import DataSet
+from src.interfaces.dataset_models import DataSet
 
 
 def soft_target_distillation(teacher, student, dataset, distil_criterion, optimizer):
@@ -132,17 +133,28 @@ def distillation_train_loop(
     # If a threshold is specified, train the student model until the threshold is reached or the score decreases
     if target is not None:
         best_score = 0
-        score = 0
+        best_model = copy.deepcopy(student)
         epochs_without_improvement = 0
 
+        # Validate the student model before training
+        metrics = general.validate(student, dataset)
+        score = metrics[1]
+        logging.info('Score: {}'.format(score))
+
         while score < target and epochs_without_improvement < patience:
+
+            # Train the student model
+            distil_technique(teacher, student, dataset, distil_criterion, optimizer)
+
             # Validate the student model
             metrics = general.validate(student, dataset)
             score = metrics[1]
 
+            logging.info('Score: {}'.format(score))
+
             # If the score is above the threshold, stop training
             if score > target:
-                print("Stopped training because target ({}) was reached: {}".format(
+                logging.info("Stopped training because target ({}) was reached: {}".format(
                     target, score))
                 break
 
@@ -156,18 +168,25 @@ def distillation_train_loop(
             else:
                 epochs_without_improvement += 1
 
-            # Train the student model
-            distil_technique(teacher, student, dataset, distil_criterion, optimizer)
+            
+
+        if epochs_without_improvement >= patience:
+            logging.info("Stopped training because score did not improve for {} epochs".format(
+                patience))
+            
+        student = best_model
 
     # Otherwise, train the student model for the specified number of epochs
     else:
         for e in range(epochs):
-
             # Train the student model
             distil_technique(teacher, student, dataset, distil_criterion, optimizer)
 
             # Validate the student model
-            general.validate(student, dataset)
+            metrics = general.validate(student, dataset)
+            score = metrics[1]
+            logging.info('Score: {}'.format(score))
+        logging.info("Stopped training after {} epochs".format(epochs))
 
     return student
 
@@ -184,19 +203,19 @@ def create_student_model(teacher_model, dataset: DataSet, fineTune=True):
 def perform_distillation(model, dataset: DataSet, student_model=None,  settings: dict = {}, **kwargs):
 
     # Extract settings
+    # TODO: Find intelligent way to set the following properties
     performance_target = settings.get("performance_target", None)
     epochs = settings.get("epochs", 1)
     distil_technique = settings.get("distil_technique", combined_loss_distillation)
     distil_criterion = settings.get("distil_criterion", F.cross_entropy)
+    optimizer = settings.get("optimizer", optim.SGD(student_model.parameters(), lr=0.01, momentum=0.5))
+    patience = settings.get("patience", 3)
 
     # Create student model if not provided
     if student_model is None:
         plot.print_header("Creating student model")
         student_model = create_student_model(model, dataset)
         plot.print_header()
-
-    # TODO: Find intelligent way to set the following properties
-    optimizer = optim.SGD(student_model.parameters(), lr=0.01, momentum=0.5)
 
     compressed_model = distillation_train_loop(
         model,
@@ -205,8 +224,8 @@ def perform_distillation(model, dataset: DataSet, student_model=None,  settings:
         distil_technique,
         distil_criterion,
         optimizer,
-        epochs=epochs,
         target=performance_target,
+        patience=patience,
     )
     plot.print_header()
 

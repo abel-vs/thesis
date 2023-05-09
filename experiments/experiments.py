@@ -4,14 +4,16 @@ import logging
 import os
 import sys
 import json
-from src.compress import compress_model
 sys.path.append('..')
 sys.path.append('../src')
 
-import src.models.dataset_models as data
+import src.interfaces.dataset_models as data
 import src.evaluation as eval
-import src.general as general
 import src.analysis as analysis
+import src.plot as plot
+
+from src.compress import compress_model
+
 
 
 SAVE_PATH = 'results/'
@@ -35,6 +37,10 @@ class ExperimentManager:
                             format='%(asctime)s - %(message)s',
                             datefmt='%H:%M:%S',
                             handlers=[logging.FileHandler(log_filepath), logging.StreamHandler()])
+        
+        # #  Redirect print statements to the logger
+        # logger = logging.getLogger(__name__)
+        # sys.stdout = LoggerWriter(logger, logging.INFO)
 
     def load_model(self):
         model = torch.load(self.config['model_path'])
@@ -45,15 +51,13 @@ class ExperimentManager:
 
     def compress(self, model, dataset):
         compression_actions = analysis.analyze(model, dataset, type="size", compression_target=self.config["target"], settings={})
+        logging.info("Compression Actions:" + str(list(c.name for c in compression_actions)))
         compressed_model = compress_model(model, dataset, compression_actions)
         return compressed_model
 
     def evaluate(self, model, data):
-        metrics = eval.get_metrics(model, data)
-        # Remove model and example_iput from metrics
-        del metrics["model"] 
-        del metrics["example_input"]
-        return metrics
+        results = eval.get_results(model, data)
+        return results
 
     def get_experiment_name(self):
         name = self.config["name"]
@@ -79,6 +83,10 @@ class ExperimentManager:
         
         logging.info('Loading dataset...')
         dataset = self.load_data()
+
+        logging.info('Evaluating original model...')
+        original_results = self.evaluate(model, dataset)
+        logging.info("Original Results:" + str(original_results))
         
         logging.info('Compressing model...')
         compressed_model = self.compress(model, dataset)
@@ -88,6 +96,7 @@ class ExperimentManager:
         
         logging.info('Evaluating compressed model...')
         compressed_results = self.evaluate(compressed_model, dataset)
+        logging.info("Compressed Results:" + str(compressed_results))
         
         logging.info('Saving evaluation results...')
         self.save_results(compressed_results)
@@ -106,9 +115,6 @@ def load_yaml_file(file_path):
         
 
 def main():
-    logging.basicConfig(level=logging.INFO,
-                        format='%(asctime)s - %(levelname)s - %(message)s')
-
     config = load_yaml_file("config.yml")
     experiments = config["experiments"]
 

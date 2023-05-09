@@ -98,6 +98,11 @@ cifar10_transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
+mnist_transform = mnist_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+
 """ Supported Dataloaders """
 
 def get_cifar_data_loaders():
@@ -110,10 +115,10 @@ def get_cifar_data_loaders():
     return train_loader, val_loader, test_loader
 
 def get_mnist_data_loaders():
-    train_dataset = MNIST(DATA_DIR, train=True, download=True)
-    test_dataset = MNIST(DATA_DIR, train=False, download=True)
+    train_dataset = MNIST(DATA_DIR, train=True, download=True, transform=mnist_transform)
+    test_dataset = MNIST(DATA_DIR, train=False, download=True, transform=mnist_transform)
     train_sampler, val_sampler = get_train_val_sampler(train_dataset, shuffle=True)
-    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, **kwargs)
+    train_loader = DataLoader(train_dataset, batch_size=128, sampler=train_sampler, **kwargs)
     val_loader = DataLoader(train_dataset, batch_size=64, sampler=val_sampler, **kwargs)
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, **kwargs)
     return train_loader, val_loader, test_loader
@@ -197,7 +202,7 @@ imagenet_train_loader, imagenet_val_loader, imagenet_test_loader = get_imagenet_
 supported_datasets = {
     "MNIST": DataSet(
         name="MNIST",
-        criterion=F.nll_loss,
+        criterion=F.cross_entropy,
         metric=metrics.accuracy,
         train_loader=mnist_train_loader,
         val_loader=mnist_val_loader,

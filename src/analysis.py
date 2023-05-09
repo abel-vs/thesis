@@ -2,8 +2,9 @@ from enum import Enum
 import torch
 import torch.nn as nn
 
-from src.models.compression_actions import CompressionAction, CompressionType, DistillationAction, PruningAction, QuantizationAction
-from src.models.techniques import DistillationTechnique, PruningTechnique
+from src.interfaces.compression_actions import CompressionAction, CompressionType, DistillationAction, PruningAction, QuantizationAction
+from src.interfaces.strategies import PruningStrategy
+from src.interfaces.techniques import DistillationTechnique, PruningTechnique
 
 class ModelCategory(str, Enum):
     cnn = "cnn"
@@ -67,7 +68,13 @@ def analyze(
     if type == "performance":
         pass
     if type == "size":
-        # Pruning of fully connected layers
+        # Focus of fully connected layers, as they contain most of the parameters
+        compression_actions.append(
+        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.1, settings={
+                              "performance_target": compression_target,
+                              "compression_target": compression_target, "strategy": PruningStrategy.OnlyLinear})
+    ),
+
         pass
     elif type == "time":
         # Pruning of filters
@@ -82,13 +89,13 @@ def analyze(
 
     
     compression_actions.append(
-        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.5, settings={
+        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.1, settings={
                               "performance_target": compression_target,
                               "compression_target": compression_target})
     ),
 
     compression_actions.append(
-        DistillationAction(name="Logits Distillation", technique=DistillationTechnique.SoftTarget,  settings={
+        DistillationAction(name="Logits Distillation", technique=DistillationTechnique.HardTarget,  settings={
                           "performance_target": compression_target,
                           "compression_target": compression_target})
     )

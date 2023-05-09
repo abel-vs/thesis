@@ -1,13 +1,14 @@
 import copy
+from enum import Enum
+import logging
 from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.utils.prune as prune
 import torch_pruning as tp
 import general
-from src.models.dataset_models import DataSet
-from src.models.techniques import PruningTechnique
-
+from src.interfaces.dataset_models import DataSet
+from src.interfaces.techniques import PruningTechnique
 
 
 """ UNSTRUCTURED PRUNING """
@@ -31,10 +32,23 @@ def unstructured_magnitude_pruning(model, rate):
 
 """ STRUCTURED PRUNING """
 
+
+def flatten_layers(model):
+    flat_layers = []
+    for layer in model.children():
+        if isinstance(layer, (nn.Sequential, nn.ModuleList)):
+            flat_layers.extend(flatten_layers(layer))
+        elif isinstance(layer, nn.ModuleDict):
+            flat_layers.extend(flatten_layers(layer.values()))
+        else:
+            flat_layers.append(layer)
+    return flat_layers
+
+
 # Method that gets first and last layer
 # TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
 def get_first_last_layers(model):
-    layers = list(model.children())
+    layers = flatten_layers(model)
     return [layers[0], layers[-1]]
 
 
@@ -46,7 +60,7 @@ def get_layers_not_to_prune(model):
     first_last_layers = get_first_last_layers(model)
     layers_not_to_prune.extend(first_last_layers)
 
-    for module in model.children():
+    for module in flatten_layers(model):
         # Skip input and output layers
         if isinstance(module, nn.Conv2d) and (previous_module is None or isinstance(previous_module, nn.Linear)):
             layers_not_to_prune.append(module)
@@ -141,6 +155,8 @@ def channel_pruning(model, dataset: DataSet, type: PruningTechnique, sparsity: f
         ignored_layers = get_layers_not_to_prune(model)
     else:
         ignored_layers = get_layers_not_to_prune(prunable_layers)
+
+    logging.info(f"Ignored layers: {ignored_layers}")
 
     # 2. Pruner initialization
     pruner = get_pruner(model, example_inputs, type, ignored_layers, {"iterative_steps": iterative_steps, "sparsity": sparsity})

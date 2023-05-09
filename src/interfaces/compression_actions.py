@@ -1,7 +1,8 @@
 
 import torch.nn.functional as F
 from enum import Enum
-from src.models.techniques import DistillationTechnique, PruningTechnique, QuantizationTechnique
+from src.interfaces.strategies import PruningStrategy
+from src.interfaces.techniques import DistillationTechnique, PruningTechnique, QuantizationTechnique
 
 
 class CompressionType(str, Enum):
@@ -18,10 +19,11 @@ class CompressionAction:
 
 class PruningAction(CompressionAction):
     """ Class that represents a pruning action. """
-    def __init__(self, name: str, technique: PruningTechnique,  sparsity: float, settings: dict = {}):
+    def __init__(self, name: str, technique: PruningTechnique,  sparsity: float, strategy: PruningStrategy, settings: dict = {}):
         super().__init__(CompressionType.pruning, name)
 
         self.technique = technique 
+        self.strategy = strategy
         self.sparsity = sparsity
         self.settings = settings  # Use settings to set all the necessary kwargs
 
