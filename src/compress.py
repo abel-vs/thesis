@@ -26,7 +26,7 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction])
             old_size = eval.get_size(compressed_model)
 
             if action.strategy == PruningStrategy.OnlyLinear:
-                layers =  prune.flatten_layers(model)
+                layers = prune.flatten_layers(model)
                 prunable_layers = [module for module in layers if isinstance(module, nn.Linear)]
             elif action.strategy == PruningStrategy.OnlyConv:
                 layers =  prune.flatten_layers(model)

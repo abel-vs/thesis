@@ -32,19 +32,6 @@ def unstructured_magnitude_pruning(model, rate):
 
 """ STRUCTURED PRUNING """
 
-
-def flatten_layers(model):
-    flat_layers = []
-    for layer in model.children():
-        if isinstance(layer, (nn.Sequential, nn.ModuleList)):
-            flat_layers.extend(flatten_layers(layer))
-        elif isinstance(layer, nn.ModuleDict):
-            flat_layers.extend(flatten_layers(layer.values()))
-        else:
-            flat_layers.append(layer)
-    return flat_layers
-
-
 # Method that gets first and last layer
 # TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
 def get_first_last_layers(model):
