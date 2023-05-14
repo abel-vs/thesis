@@ -27,6 +27,13 @@ class PruningAction(CompressionAction):
         self.sparsity = sparsity
         self.settings = settings  # Use settings to set all the necessary kwargs
 
+    def __str__(self):
+        return f"PruningAction(name={self.name}, technique={self.technique}, sparsity={self.sparsity}, strategy={self.strategy})"
+    
+    def __repr__(self):
+        return str(self)
+    
+
 
 class QuantizationAction(CompressionAction):
     """ Class that represents a quantization action. """
@@ -36,6 +43,12 @@ class QuantizationAction(CompressionAction):
         self.technique = technique 
         self.quantization_bits = settings.get("quantization_bits", 8)
         self.settings = settings  # Use settings to set all the necessary kwargs
+    
+    def __str__(self):
+        return f"QuantizationAction(name={self.name}, technique={self.technique}, quantization_bits={self.quantization_bits})"
+    
+    def __repr__(self):
+        return str(self)
 
 
 class DistillationAction(CompressionAction):
@@ -46,3 +59,9 @@ class DistillationAction(CompressionAction):
         self.technique = technique
         self.distillation_loss = settings.get("distillation_loss", F.mse_loss)
         self.settings = settings  # Use settings to set all the necessary kwargs
+
+    def __str__(self):
+        return f"DistillationAction(name={self.name}, technique={self.technique}, distillation_loss={self.distillation_loss})"
+
+    def __repr__(self):
+        return str(self)

@@ -15,7 +15,7 @@ from src.interfaces.dataset_models import DataSet
 
 
 # General train function
-def train(model, dataset: DataSet, optimizer=None, device=None):
+def train(model, dataset: DataSet, optimizer=None, device=None, writer=None):
     if device is None:
         device = get_device()
     model.to(device)
@@ -109,19 +109,29 @@ def validate(model, dataset, device=None):
     return test(model, dataset, validate=True, device=device)
 
 # General finetune method
-def finetune(model, dataset, target, epochs=None, patience=3, save_path=None, device=None, optimizer=None):
+def finetune(model, dataset, target, max_it=None, patience=3, save_path=None, device=None, optimizer=None, writer=None, writer_tag="finetune"):
     epochs_without_improvement = 0
-    iterations = 0
+    it = 0
 
     start_metrics = validate(model, dataset, device=device)
-    score = start_metrics[1]
-    best_score = score
-    best_model = copy.deepcopy(model)
+    if writer is not None:
+        plot.log_metrics_to_tensorboard(writer, writer_tag, start_metrics, start_metrics, it)
+
+    start_score = start_metrics[1]
+    start_model = copy.deepcopy(model) 
+    score, best_score = 0, 0
 
     while score < target and epochs_without_improvement < patience:
-        train(model, dataset, optimizer=optimizer, device=device)
-        metrics = validate(model, dataset, device=device)
-        score = metrics[1]
+        
+        it += 1
+
+        train_metrics = train(model, dataset, optimizer=optimizer, device=device)
+        val_metrics = validate(model, dataset, device=device)
+
+        if writer is not None:
+            plot.log_metrics_to_tensorboard(writer, writer_tag, train_metrics, val_metrics, it)
+
+        score = val_metrics[1]
 
         if score > best_score:
             best_model = copy.deepcopy(model)
@@ -132,9 +142,8 @@ def finetune(model, dataset, target, epochs=None, patience=3, save_path=None, de
         else:
             epochs_without_improvement += 1
 
-        iterations += 1
 
-        if epochs is not None and iterations >= epochs:
+        if max_it is not None and it >= max_it:
             print("Maximum number of iterations reached")
             break
 
@@ -142,11 +151,15 @@ def finetune(model, dataset, target, epochs=None, patience=3, save_path=None, de
     if epochs_without_improvement >= patience:
         print("Finetuning stopped due to early stopping with patience = {}".format(patience))
     else:
-        print("Finetuning stopped due to reaching the target score")
+        print("Finetuning stopped due to reaching the target score, after {} iterations".format(it))
 
-    print("Finetuning finished after {} iterations".format(iterations))
-    print("Best score: {:.4f}".format(best_score))
-    return best_model
+
+    if best_score < start_score:
+        print("Finetuning did not improve the model")
+        return start_model
+    else:
+        print("Best score: {:.4f}".format(best_score))
+        return best_model
 
 # Method that imports the classes from a module to the globals dictionary of a process
 def import_module_classes(module, globals):

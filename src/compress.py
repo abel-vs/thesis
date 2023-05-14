@@ -8,12 +8,14 @@ import src.compression.pruning as prune
 from src.interfaces.strategies import PruningStrategy
 import src.plot as plot
 import src.evaluation as eval
+import src.analysis as analysis
 
 from typing import List
 from src.interfaces.compression_actions import CompressionAction, DistillationAction, PruningAction, QuantizationAction
+from torch.utils.tensorboard import SummaryWriter
 
 
-def compress_model(model, dataset, compression_actions: List[CompressionAction]):
+def compress_model(model, dataset, compression_actions: List[CompressionAction], writer: SummaryWriter = None, device=None):
     """Main method for compressing a model via API"""
     
     compressed_model = copy.deepcopy(model)
@@ -26,15 +28,13 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction])
             old_size = eval.get_size(compressed_model)
 
             if action.strategy == PruningStrategy.OnlyLinear:
-                layers = prune.flatten_layers(model)
-                prunable_layers = [module for module in layers if isinstance(module, nn.Linear)]
+                prunable_layers = analysis.get_linear_layers(model)
             elif action.strategy == PruningStrategy.OnlyConv:
-                layers =  prune.flatten_layers(model)
-                prunable_layers = [module for module in layers if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d))]
+                prunable_layers = analysis.get_conv_layers(model)
             else:
                 prunable_layers = None
                 
-            compressed_model = prune.channel_pruning(compressed_model, dataset, action.technique, action.sparsity, prunable_layers=prunable_layers, **action.settings)
+            compressed_model = prune.channel_pruning(compressed_model, dataset, action.technique, action.sparsity, prunable_layers=prunable_layers, writer=writer, device=device, **action.settings)
 
             new_params = eval.get_params(compressed_model)
             new_size = eval.get_size(compressed_model)
@@ -45,11 +45,13 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction])
         
         if type(action) == DistillationAction:
             plot.print_header("DISTILLATION STARTED")
-            compressed_model = distil.perform_distillation(model, dataset, compressed_model,  action.settings)
+            compressed_model = distil.perform_distillation(model, dataset, technique=action.technique, student_model=compressed_model,  settings = action.settings, writer=writer, device=device)
 
             
         if type(action) ==  QuantizationAction:
             plot.print_header("QUANTIZATION STARTED")
             compressed_model = quant.dynamic_quantization(compressed_model)
+
+    writer.close()
 
     return compressed_model

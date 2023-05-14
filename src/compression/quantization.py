@@ -2,7 +2,7 @@ import copy
 from enum import Enum
 import torch
 import torch.nn as nn
-from torch.quantization import QuantStub, DeQuantStub
+from torch.quantization import QuantStub, DeQuantStub, FakeQuantize
 from tqdm import tqdm
 import general
 
@@ -102,6 +102,12 @@ def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
 
     return modules_to_fuse
 
+
+def is_quantized(model):
+    for module in model.modules():
+        if isinstance(module, QuantStub) or isinstance(module, DeQuantStub) or isinstance(module, FakeQuantize):
+            return True
+    return False
 
 # Method that performs dynamic quantization on a model
 def dynamic_quantization(model, backend="fbgemm", layers_to_quantize={torch.nn.Linear}, dtype=torch.qint8):

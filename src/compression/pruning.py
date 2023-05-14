@@ -7,6 +7,8 @@ import torch.nn as nn
 import torch.nn.utils.prune as prune
 import torch_pruning as tp
 import general
+from src import plot
+import src.analysis as analysis
 from src.interfaces.dataset_models import DataSet
 from src.interfaces.techniques import PruningTechnique
 
@@ -14,6 +16,8 @@ from src.interfaces.techniques import PruningTechnique
 """ UNSTRUCTURED PRUNING """
 
 # Method that randomly prunes a module by a given rate from 0% to 100%
+
+
 def unstructured_random_pruning(model, rate):
     for module in model.children():
         prune.random_unstructured(module, name="weight", amount=rate)
@@ -22,6 +26,8 @@ def unstructured_random_pruning(model, rate):
     return model
 
 # Method that randomly prunes a module by a given rate from 0% to 100%
+
+
 def unstructured_magnitude_pruning(model, rate):
     for module in model.children():
         prune.l1_unstructured(module, name="weight", amount=rate)
@@ -34,8 +40,15 @@ def unstructured_magnitude_pruning(model, rate):
 
 # Method that gets first and last layer
 # TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
+
+
 def get_first_last_layers(model):
-    layers = flatten_layers(model)
+    if isinstance(model, list):
+        layers = model
+    elif isinstance(model, torch.nn.Module):
+        layers = analysis.flatten_layers(model)
+    else:
+        raise Exception("Model must be a list or torch.nn.Module")
     return [layers[0], layers[-1]]
 
 
@@ -47,42 +60,48 @@ def get_layers_not_to_prune(model):
     first_last_layers = get_first_last_layers(model)
     layers_not_to_prune.extend(first_last_layers)
 
-    for module in flatten_layers(model):
-        # Skip input and output layers
-        if isinstance(module, nn.Conv2d) and (previous_module is None or isinstance(previous_module, nn.Linear)):
-            layers_not_to_prune.append(module)
-            continue
+    # Flatten if not yet flattened
+    if not isinstance(model, list):
+        model = analysis.flatten_layers(model)
 
-        # Skip batch normalization layers
-        if isinstance(module, nn.BatchNorm2d):
-            layers_not_to_prune.append(module)
-            continue
+    for module in model:
+        # # Skip input and output layers
+        # if isinstance(module, nn.Conv2d) and (previous_module is None or isinstance(previous_module, nn.Linear)):
+        #     layers_not_to_prune.append(module)
+        #     continue
 
-        # Skip shortcut connections and first and last layers in each residual block
-        if isinstance(module, nn.Conv2d):
-            if isinstance(previous_module, nn.ReLU) or isinstance(previous_module, nn.Conv2d):
-                layers_not_to_prune.append(module)
-                continue
+        # # Skip batch normalization layers
+        # if isinstance(module, nn.BatchNorm2d):
+        #     layers_not_to_prune.append(module)
+        #     continue
+
+        # # Skip shortcut connections and first and last layers in each residual block
+        # if isinstance(module, nn.Conv2d):
+        #     if isinstance(previous_module, nn.ReLU) or isinstance(previous_module, nn.Conv2d):
+        #         layers_not_to_prune.append(module)
+        #         continue
 
         previous_module = module
 
     return layers_not_to_prune
 
 
-# Method that estimates the required channel sparsity to reach a target global sparsity 
+# Method that estimates the required channel sparsity to reach a target global sparsity
 def calculate_channel_sparsity(model: nn.Module, target_global_sparsity: float) -> List[float]:
     total_parameters = 0
     total_conv_parameters = 0
 
     for layer in model.modules():
         if isinstance(layer, (nn.Conv2d, nn.Linear)):
-            layer_parameters = torch.prod(torch.tensor(layer.weight.size())).item()
+            layer_parameters = torch.prod(
+                torch.tensor(layer.weight.size())).item()
             total_parameters += layer_parameters
 
             if isinstance(layer, nn.Conv2d):
                 total_conv_parameters += layer_parameters
 
-    target_conv_sparsity = (1 - (1 - target_global_sparsity) * total_parameters / total_conv_parameters)
+    target_conv_sparsity = (1 - (1 - target_global_sparsity)
+                            * total_parameters / total_conv_parameters)
 
     channel_sparsity = []
     for layer in model.modules():
@@ -99,37 +118,51 @@ def calculate_channel_sparsity(model: nn.Module, target_global_sparsity: float) 
 def get_pruner(model, example_inputs, type, ignored_layers, settings):
     if type == "random":
         imp = tp.importance.RandomImportance()
-        pruner =  tp.pruner.MagnitudePruner
+        pruner = tp.pruner.MagnitudePruner
     elif type == "l1":
         imp = tp.importance.MagnitudeImportance(p=1)
-        pruner =  tp.pruner.MagnitudePruner
+        pruner = tp.pruner.MagnitudePruner
     elif type == "lamp":
         imp = tp.importance.LAMPImportance(p=2)
-        pruner =  tp.pruner.MagnitudePruner
+        pruner = tp.pruner.MagnitudePruner
     elif type == "slim":
         imp = tp.importance.BNScaleImportance()
-        pruner =  tp.pruner.MagnitudePruner
+        pruner = tp.pruner.MagnitudePruner
     elif type == "group_norm":
         imp = tp.importance.GroupNormImportance(p=2)
-        pruner =  tp.pruner.GroupNormPruner
+        pruner = tp.pruner.GroupNormPruner
     else:
         raise NotImplementedError
 
-    return pruner(model, 
-                  example_inputs, 
-                  importance=imp, 
-                  iterative_steps=settings["iterative_steps"], 
-                  ch_sparsity=settings["sparsity"], 
+    return pruner(model,
+                  example_inputs,
+                  importance=imp,
+                  iterative_steps=settings["iterative_steps"],
+                  ch_sparsity=settings["sparsity"],
                   ignored_layers=ignored_layers)
-    
+
 
 # Method that applies channel pruning using a given technique
-def channel_pruning(model, dataset: DataSet, type: PruningTechnique, sparsity: float, fineTune=False, iterative_steps=3, prunable_layers = None, optimizer=None, inPlace=False, **kwargs):
-    device = general.get_device()
+def channel_pruning(
+        model,
+        dataset: DataSet,
+        technique: PruningTechnique,
+        sparsity: float,
+        fineTune=False,
+        iterative_steps=3,
+        prunable_layers=None,
+        optimizer=None,
+        inPlace=False,
+        writer=None,
+        save_path=None,
+        device=None,
+        **kwargs):
+    
     if not inPlace:
         model = copy.deepcopy(model)
     model.to(device)
-    example_inputs = general.get_example_inputs(dataset.train_loader).to(device)
+    example_inputs = general.get_example_inputs(
+        dataset.train_loader).to(device)
 
     # TODO: optimizer should be able to be created in a smart way
     if optimizer is None:
@@ -143,16 +176,23 @@ def channel_pruning(model, dataset: DataSet, type: PruningTechnique, sparsity: f
     else:
         ignored_layers = get_layers_not_to_prune(prunable_layers)
 
-    logging.info(f"Ignored layers: {ignored_layers}")
+    print("Ignored layers: ", list(type(x).__name__ for x in ignored_layers))
+    logging.info(
+        f"Ignored layers: {list(type(x).__name__ for x in ignored_layers)}")
 
     # 2. Pruner initialization
-    pruner = get_pruner(model, example_inputs, type, ignored_layers, {"iterative_steps": iterative_steps, "sparsity": sparsity})
+    pruner = get_pruner(model, example_inputs, technique, ignored_layers, {
+                        "iterative_steps": iterative_steps, "sparsity": sparsity})
 
     # 3. Pruning
     for i in range(iterative_steps):
-        pruner.step() # Removes the least important channels from the model
+        pruner.step()  # Removes the least important channels from the model
         if fineTune:
-            general.train(model, dataset, optimizer=optimizer)
-            # general.validate(model, dataset)
+            plot.print_header(f"Pruning step {i+1}/{iterative_steps}")
+            general.finetune(model, dataset, target=99, patience=3, optimizer=optimizer,
+                             writer=writer, writer_tag=f"pruning_{(i+1)/iterative_steps*sparsity}", **kwargs)
+            if save_path is not None:
+                torch.save(
+                    model, f"{save_path}/pruned_{(i+1)/iterative_steps*sparsity}.pt")
 
     return model

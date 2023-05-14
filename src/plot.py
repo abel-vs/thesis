@@ -134,16 +134,19 @@ def print_before_after_results(before, after):
     print_header()
 
 
-def plot_relation(data, title, x_label, y_label, base_name):
-    fig = plt.figure(figsize=(8, 4), dpi=100)
-    plt.plot(list(map(lambda x: x[x_label],data)), list(map(lambda y: y[y_label], data)), linestyle="", marker="o")
-    plt.title(title)
-    plt.ylabel(y_label)
-    plt.xlabel(x_label)
-    if base_name != "":
-        fig.savefig(base_name + ".png")
-        # pickle.dump([loss, smooth_loss, it], open(base_name + '-' + str(it) + '.p', 'wb'))
-        # print(it)
-    else:
-        plt.show()
-    # plt.close("all")
+# Method that prints a header
+def log_metrics_to_tensorboard(writer, phase, train_metrics, val_metrics, step):
+    train_loss, train_score, train_duration, train_batch_duration, train_data_duration = train_metrics
+    val_loss, val_score, val_duration, val_batch_duration, val_data_duration = val_metrics
+
+    writer.add_scalars(f"Loss/{phase}", {"Train": train_loss, "Validation": val_loss}, step)
+    writer.add_scalars(f"Score/{phase}", {"Train": train_score, "Validation": val_score}, step)
+    writer.add_scalars(f"Batch duration/{phase}", {"Train": train_batch_duration, "Validation": val_batch_duration}, step)
+    writer.add_scalars(f"Data duration/{phase}", {"Train": train_data_duration, "Validation": val_data_duration}, step)
+    writer.flush()
+
+# General metrics logging method
+def log_metrics(phase, label, metrics, step, writer):
+     for metric in metrics:
+        writer.add_scalars(f"{metric}/{phase}", {label: metrics[metric]}, step)
+        writer.flush()

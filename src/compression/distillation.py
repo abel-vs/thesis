@@ -9,15 +9,19 @@ import src.compression.pruning as prune
 import general
 import plot
 from src.interfaces.dataset_models import DataSet
+from torch.utils.tensorboard import SummaryWriter
+
+from src.interfaces.techniques import DistillationTechnique
 
 
-def soft_target_distillation(teacher, student, dataset, distil_criterion, optimizer):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+def soft_target_distillation(teacher, student, dataset, distil_criterion, optimizer, device):    
     teacher.eval()  # Set teacher model to evaluation mode
     student.train()  # Set student model to training mode
 
-    for data, _ in tqdm(dataset.train_loader, desc="Distillation Training"):
+    epoch_loss = 0
+    epoch_score = 0
+
+    for data, target in tqdm(dataset.train_loader, desc="Distillation Training"):
         # Move data to the appropriate device
         data = data.to(device)
 
@@ -38,16 +42,24 @@ def soft_target_distillation(teacher, student, dataset, distil_criterion, optimi
         # Update the student model's parameters
         optimizer.step()
 
-    return distill_loss
+        # For logging purposes
+        epoch_loss += distill_loss.item()
+        epoch_score += dataset.metric(student_output, target)
+
+    epoch_loss /= len(dataset.train_loader)
+    epoch_score /= len(dataset.train_loader)
+
+    return {"loss": epoch_loss, "score": epoch_score}
 
 
-def hard_target_distillation(teacher, student, dataset, distil_criterion, optimizer):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+def hard_target_distillation(teacher, student, dataset, distil_criterion, optimizer, device):
     teacher.eval()  # Set teacher model to evaluation mode
     student.train()  # Set student model to training mode
 
-    for data, _ in tqdm(dataset.train_loader, desc="Distillation Training"):
+    epoch_loss = 0
+    epoch_score = 0
+
+    for data, target in tqdm(dataset.train_loader, desc="Distillation Training"):
         # Move data to the appropriate device
         data = data.to(device)
 
@@ -69,16 +81,36 @@ def hard_target_distillation(teacher, student, dataset, distil_criterion, optimi
         # Update the student model's parameters
         optimizer.step()
 
-    return distill_loss
+        # For logging purposes
+        epoch_loss += distill_loss.item()
+        epoch_score += dataset.metric(student_output, target)
+
+    epoch_loss /= len(dataset.train_loader)
+    epoch_score /= len(dataset.train_loader)
 
 
-def combined_loss_distillation(teacher, student, dataset, distil_criterion, optimizer, alpha=0, temperature=1.5):
-    device = general.get_device()
+    return {"loss": epoch_loss, "score": epoch_score}
+
+def get_distil_method(technique):
+    if technique == DistillationTechnique.SoftTarget:
+        return soft_target_distillation
+    elif technique == DistillationTechnique.HardTarget:
+        return hard_target_distillation
+    elif technique == DistillationTechnique.CombinedLoss:
+        return combined_loss_distillation
+    else:
+        raise ValueError("Invalid distillation technique")
+
+
+def combined_loss_distillation(teacher, student, dataset, distil_criterion, optimizer, device, alpha=0.2, temperature=1.5):
     
     teacher.eval()  # Set teacher model to evaluation mode
     student.train()  # Set student model to training mode
 
     task_criterion = dataset.criterion
+
+    epoch_loss = 0
+    epoch_score = 0
 
     for data, hard_target in tqdm(dataset.train_loader, desc="Distillation Training"):
         # Move data and hard_target to the appropriate device
@@ -110,7 +142,15 @@ def combined_loss_distillation(teacher, student, dataset, distil_criterion, opti
         # Update the student model's parameters
         optimizer.step()
 
-    return combined_loss
+        # For logging purposes
+        epoch_loss += combined_loss.item()
+        epoch_score += dataset.metric(student_output, hard_target)
+
+
+    epoch_loss /= len(dataset.train_loader)
+    epoch_score /= len(dataset.train_loader)
+
+    return {"loss": epoch_loss, "score": epoch_score}
 
 
 # Method that trains the student model using distillation
@@ -125,8 +165,12 @@ def distillation_train_loop(
     patience=3,
     target=None,
     save_path=None,
+    writer=None,
+    device=None,
 ):
-    device = general.get_device()
+    if device is None:
+        device = general.get_device()
+
     teacher.to(device)
     student.to(device)
 
@@ -141,15 +185,24 @@ def distillation_train_loop(
         score = metrics[1]
         logging.info('Score: {}'.format(score))
 
+        it = 0
+
         while score < target and epochs_without_improvement < patience:
 
             # Train the student model
-            distil_technique(teacher, student, dataset, distil_criterion, optimizer)
+            distil_metrics = distil_technique(teacher, student, dataset, distil_criterion, optimizer, device)
 
             # Validate the student model
-            metrics = general.validate(student, dataset)
-            score = metrics[1]
+            val_metrics = general.validate(student, dataset)
 
+            if writer is not None:
+                plot.log_metrics("distillation", "train", distil_metrics, it, writer)
+                plot.log_metrics("distillation", "validation", {
+                    "loss": val_metrics[0],
+                    
+                }, it, writer)
+            
+            score = val_metrics[1]
             logging.info('Score: {}'.format(score))
 
             # If the score is above the threshold, stop training
@@ -167,6 +220,8 @@ def distillation_train_loop(
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
+            
+            it += 1
 
             
 
@@ -200,33 +255,33 @@ def create_student_model(teacher_model, dataset: DataSet, fineTune=True):
 
 
 # Method that performs the whole distillation procedure
-def perform_distillation(model, dataset: DataSet, student_model=None,  settings: dict = {}, **kwargs):
+def perform_distillation(model, dataset: DataSet, technique = DistillationTechnique.CombinedLoss, student_model=None,  settings: dict = {}, writer: SummaryWriter=None, device=None, **kwargs):
 
     # Extract settings
     # TODO: Find intelligent way to set the following properties
     performance_target = settings.get("performance_target", None)
-    epochs = settings.get("epochs", 1)
-    distil_technique = settings.get("distil_technique", combined_loss_distillation)
     distil_criterion = settings.get("distil_criterion", F.cross_entropy)
     optimizer = settings.get("optimizer", optim.SGD(student_model.parameters(), lr=0.01, momentum=0.5))
     patience = settings.get("patience", 3)
+
+    distil_method = get_distil_method(technique)
 
     # Create student model if not provided
     if student_model is None:
         plot.print_header("Creating student model")
         student_model = create_student_model(model, dataset)
-        plot.print_header()
 
     compressed_model = distillation_train_loop(
         model,
         student_model,
         dataset,
-        distil_technique,
+        distil_method,
         distil_criterion,
         optimizer,
         target=performance_target,
         patience=patience,
+        writer=writer,
+        device=device,
     )
-    plot.print_header()
 
     return compressed_model

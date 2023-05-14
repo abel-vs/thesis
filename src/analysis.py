@@ -19,14 +19,12 @@ class ModelCategory(str, Enum):
 def flatten_layers(model):
     flat_layers = []
     for layer in model.children():
-        if isinstance(layer, (nn.Sequential, nn.ModuleList)):
+        children = list(layer.children())
+        if len(children) > 0:
             flat_layers.extend(flatten_layers(layer))
-        elif isinstance(layer, nn.ModuleDict):
-            flat_layers.extend(flatten_layers(layer.values()))
         else:
             flat_layers.append(layer)
     return flat_layers
-
 
 
 """ Analyzing Layers """
@@ -58,6 +56,20 @@ def get_layer_types_with_parameter_counts(model):
             types_with_params[module_type] = num_parameters
             
     return types_with_params
+
+
+# Method that returns a dict with the types of layers of a model and their percentage of the total parameter count
+def get_layer_types_with_parameter_percentage(model):
+    types_with_params = get_layer_types_with_parameter_counts(model)
+    total_params = sum(types_with_params.values())
+    types_with_percentage = {}
+
+    for layer_type, param_count in types_with_params.items():
+        percentage = (param_count / total_params) * 100
+        types_with_percentage[layer_type] = percentage
+
+    return types_with_percentage
+
 
 
 
@@ -115,19 +127,26 @@ def analyze(
     if type == "size":
         # Focus of fully connected layers, as they contain most of the parameters
         compression_actions.append(
-        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.1, settings={
+        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.5, strategy=PruningStrategy.OnlyLinear,settings={
                               "performance_target": compression_target,
                               "compression_target": compression_target, 
-                              "strategy": PruningStrategy.OnlyLinear})
+                              })
+        )
+
+        compression_actions.append(
+            DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss,  settings={
+                            "performance_target": compression_target,
+                            "compression_target": compression_target, 
+                            "patience": 5})
         )
 
     elif type == "time":
         # Pruning of filters
         compression_actions.append(
-        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.1, settings={
+        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.1, strategy=PruningStrategy.OnlyConv, settings={
                               "performance_target": compression_target,
                               "compression_target": compression_target, 
-                              "strategy": PruningStrategy.OnlyConv}))
+                              }))
 
 
     elif type == "computations":
@@ -136,10 +155,9 @@ def analyze(
             QuantizationAction(name="INT-8 Dynamic Quantization")
         )
         compression_actions.append(
-        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.1, settings={
+        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.1,  strategy=PruningStrategy.OnlyConv, settings={
                               "performance_target": compression_target,
-                              "compression_target": compression_target, 
-                              "strategy": PruningStrategy.OnlyConv}))
+                              "compression_target": compression_target}))
     else:
         raise Exception("Unknown compression type")
 

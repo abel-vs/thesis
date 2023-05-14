@@ -57,8 +57,10 @@ class ImageNetDataset(torch.utils.data.Dataset):
 """ General Variables """
 
 use_cuda = True
-kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
+kwargs = {'num_workers': 6, 'pin_memory': True} if use_cuda else {}
 
+TEST_BATCH_SIZE = 64
+TRAIN_BATCH_SIZE = 32
 
 """ Helper Methods """
 def get_train_val_sampler(dataset, shuffle=False):
@@ -109,18 +111,18 @@ def get_cifar_data_loaders():
     train_dataset = CIFAR10(DATA_DIR, train=True, download=True, transform=cifar10_transform)
     test_dataset = CIFAR10(DATA_DIR, train=False, download=True, transform=cifar10_transform)
     train_sampler, val_sampler = get_train_val_sampler(train_dataset, shuffle=False)
-    train_loader = DataLoader(train_dataset, batch_size=8, sampler=train_sampler, **kwargs)
-    val_loader = DataLoader(train_dataset, batch_size=64, sampler=val_sampler, **kwargs)
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, **kwargs)
+    train_loader = DataLoader(train_dataset, batch_size=TRAIN_BATCH_SIZE, sampler=train_sampler, **kwargs)
+    val_loader = DataLoader(train_dataset, batch_size=TEST_BATCH_SIZE, sampler=val_sampler, **kwargs)
+    test_loader = DataLoader(test_dataset, batch_size=TEST_BATCH_SIZE, shuffle=True, **kwargs)
     return train_loader, val_loader, test_loader
 
 def get_mnist_data_loaders():
     train_dataset = MNIST(DATA_DIR, train=True, download=True, transform=mnist_transform)
     test_dataset = MNIST(DATA_DIR, train=False, download=True, transform=mnist_transform)
     train_sampler, val_sampler = get_train_val_sampler(train_dataset, shuffle=True)
-    train_loader = DataLoader(train_dataset, batch_size=64, sampler=train_sampler, **kwargs)
-    val_loader = DataLoader(train_dataset, batch_size=64, sampler=val_sampler, **kwargs)
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, **kwargs)
+    train_loader = DataLoader(train_dataset, batch_size=TRAIN_BATCH_SIZE, sampler=train_sampler, **kwargs)
+    val_loader = DataLoader(train_dataset, batch_size=TEST_BATCH_SIZE, sampler=val_sampler, **kwargs)
+    test_loader = DataLoader(test_dataset, batch_size=TEST_BATCH_SIZE, shuffle=True, **kwargs)
     return train_loader, val_loader, test_loader
 
 def get_imagenet_loaders():
@@ -129,9 +131,9 @@ def get_imagenet_loaders():
     val_dataset = ImageNetDataset(dataset['validation'], transform=imagenet_transform)
     # The test dataset is not available for ImageNet, all labels are -1, so using validation
     test_dataset = ImageNetDataset(dataset['validation'], transform=imagenet_transform)
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, **kwargs)
-    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=True, **kwargs)
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, **kwargs)
+    train_loader = DataLoader(train_dataset, batch_size=TRAIN_BATCH_SIZE, shuffle=True, **kwargs)
+    val_loader = DataLoader(val_dataset, batch_size=TEST_BATCH_SIZE, shuffle=True, **kwargs)
+    test_loader = DataLoader(test_dataset, batch_size=TEST_BATCH_SIZE, shuffle=True, **kwargs)
     return train_loader, val_loader, test_loader
 
 
