@@ -152,7 +152,7 @@ def channel_pruning(
         iterative_steps=3,
         prunable_layers=None,
         optimizer=None,
-        inPlace=False,
+        inPlace=True,
         writer=None,
         save_path=None,
         device=None,
@@ -161,8 +161,7 @@ def channel_pruning(
     if not inPlace:
         model = copy.deepcopy(model)
     model.to(device)
-    example_inputs = general.get_example_inputs(
-        dataset.train_loader).to(device)
+    example_inputs = general.get_example_inputs(dataset.train_loader, device=device)
 
     # TODO: optimizer should be able to be created in a smart way
     if optimizer is None:
