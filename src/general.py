@@ -32,7 +32,7 @@ def train(model, dataset: DataSet, optimizer=None, device=None, writer=None):
     train_loss = 0
     train_score = 0
 
-    for (data, target) in tqdm(train_loader, desc="Train"):
+    for (data, target) in tqdm(train_loader, desc="Train", position=0, leave=True, dynamic_ncols=True):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -80,7 +80,7 @@ def test(model, dataset , validate=False, device=None):
     st = time.time()
 
     with torch.no_grad():
-        for (data, target) in tqdm(test_loader, desc=("Test" if not validate else "Validate")):
+        for (data, target) in tqdm(test_loader, desc=("Test" if not validate else "Validate"), position=0, leave=True, dynamic_ncols=True):
             data, target = data.to(device), target.to(device)
             output = model(data)
             loss = criterion(output, target)
@@ -109,7 +109,7 @@ def validate(model, dataset, device=None):
     return test(model, dataset, validate=True, device=device)
 
 # General finetune method
-def finetune(model, dataset, target, max_it=None, patience=3, save_path=None, device=None, optimizer=None, writer=None, writer_tag="finetune"):
+def finetune(model, dataset, target=100, max_it=None, patience=3, save_path=None, device=None, optimizer=None, writer=None, writer_tag="finetune"):
     epochs_without_improvement = 0
     it = 0
 

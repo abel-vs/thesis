@@ -24,7 +24,7 @@ def soft_target_distillation(teacher, student, dataset, distil_criterion, optimi
     epoch_loss = 0
     epoch_score = 0
 
-    for data, target in tqdm(dataset.train_loader, desc="Distillation Training", position=0, leave=True):
+    for data, target in tqdm(dataset.train_loader, desc="Distillation Training", position=0, leave=True, dynamic_ncols=True):
         # Move data to the appropriate device
         data = data.to(device)
 
@@ -66,7 +66,7 @@ def hard_target_distillation(teacher, student, dataset, distil_criterion, optimi
     epoch_loss = 0
     epoch_score = 0
 
-    for data, target in tqdm(dataset.train_loader, desc="Distillation Training", position=0, leave=True):
+    for data, target in tqdm(dataset.train_loader, desc="Distillation Training", position=0, leave=True, dynamic_ncols=True):
         # Move data to the appropriate device
         data = data.to(device)
 
@@ -120,7 +120,7 @@ def combined_loss_distillation(teacher, student, dataset, distil_criterion, opti
     epoch_loss = 0
     epoch_score = 0
 
-    for data, hard_target in tqdm(dataset.train_loader, desc="Distillation Training", position=0, leave=True):
+    for data, hard_target in tqdm(dataset.train_loader, desc="Distillation Training", position=0, leave=True, dynamic_ncols=True):
         # Move data and hard_target to the appropriate device
         data = data.to(device)
         hard_target = hard_target.to(device)
@@ -181,6 +181,7 @@ def distillation_train_loop(
         device = general.get_device()
 
     teacher.to(device)
+    teacher.eval()
     student.to(device)
 
     # If a threshold is specified, train the student model until the threshold is reached or the score decreases
@@ -276,7 +277,7 @@ def create_student_model(teacher_model, dataset: DataSet, fineTune=True):
 
 
 # Method that performs the whole distillation procedure
-def perform_distillation(model, dataset: DataSet, technique=DistillationTechnique.CombinedLoss, student_model=None,  settings: dict = {}, writer: SummaryWriter = None, device=None, **kwargs):
+def perform_distillation(model, dataset: DataSet, technique=DistillationTechnique.CombinedLoss, student_model=None,  settings: dict = {}, writer: SummaryWriter = None, device=None, save_path=None, **kwargs):
 
     # Extract settings
     # TODO: Find intelligent way to set the following properties
@@ -304,6 +305,7 @@ def perform_distillation(model, dataset: DataSet, technique=DistillationTechniqu
         patience=patience,
         writer=writer,
         device=device,
+        save_path=save_path
     )
 
     return compressed_model

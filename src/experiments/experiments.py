@@ -78,8 +78,10 @@ class ExperimentManager:
         logging.info("Compression Actions:")
         for action in compression_actions:
             logging.info(action)
+
+        save_path = os.path.join(LOG_DIR, self.foldername, self.get_experiment_name() + ".pt")
         compressed_model = compress_model(
-            model, dataset, compression_actions, writer=self.writer, device=self.device)
+            model, dataset, compression_actions, writer=self.writer, device=self.device, save_path=save_path)
         return compressed_model
 
     # Method to evaluate model
@@ -97,21 +99,25 @@ class ExperimentManager:
         target = self.config["target"]
         return f"{name}_{target:.0f}".lower()
 
+    # Method to save model
     def save_model(self, model):
         filename = self.get_experiment_name() + ".pt"
         torch.save(model, os.path.join(LOG_DIR, self.foldername, filename))
 
+    # Method to save results
     def save_results(self, results, tag):
         filename = self.get_experiment_name() + tag + ".json"
         with open(os.path.join(LOG_DIR, self.foldername, filename), 'w') as f:
-            json.dump(results, f)
+            json.dump(results, f, indent=4)
 
+    # Method to save experiment settings
     def save_settings(self):
         filename = self.get_experiment_name() + "_settings.json"
         serialized_config = serialize_config(self.config)
         with open(os.path.join(LOG_DIR, self.foldername, filename), 'w') as f:
             json.dump(serialized_config, f, indent=4)
 
+    # Method to run experiment, this is the main method
     def run_experiment(self):
         self.setup_logging()
 
@@ -166,8 +172,6 @@ def load_yaml_file(file_path):
             return None
 
 # Method to create compression actions from config file
-
-
 def create_compression_action(action_dict):
     action_type = action_dict["type"]
     if action_type == CompressionType.pruning:
@@ -194,6 +198,7 @@ def create_compression_action(action_dict):
         raise ValueError(f"Unknown compression action type: {action_type}")
 
 
+#  Method to process config files
 def process_configs(experiment_config, compression_actions_config):
     compression_sets = {}
     for action_set in compression_actions_config["compression_sets"]:
@@ -208,7 +213,7 @@ def process_configs(experiment_config, compression_actions_config):
 
     return experiment_config
 
-
+# Method that prepares the config file for saving
 def serialize_config(config):
     config = config.copy()
     actions = config.pop("compression_actions", None)

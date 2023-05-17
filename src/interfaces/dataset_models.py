@@ -15,7 +15,7 @@ from datasets import load_dataset
 """ General Variables """
 
 use_cuda = True
-kwargs = {'num_workers': 6, 'pin_memory': True} if use_cuda else {}
+kwargs = {'num_workers': 8, 'pin_memory': True} if use_cuda else {}
 
 DATA_DIR = "/workspace/volume/data"
 CACHE_DIR = "/workspace/volume/cache"

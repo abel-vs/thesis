@@ -15,10 +15,11 @@ from src.interfaces.compression_actions import CompressionAction, DistillationAc
 from torch.utils.tensorboard import SummaryWriter
 
 
-def compress_model(model, dataset, compression_actions: List[CompressionAction], writer: SummaryWriter = None, device=None):
+def compress_model(model, dataset, compression_actions: List[CompressionAction], writer: SummaryWriter = None, device=None, save_path=None):
     """Main method for compressing a model via API"""
     
     compressed_model = copy.deepcopy(model)
+    model.eval() # Original model shouldn't be changed
 
     for action in compression_actions:
         if type(action) == PruningAction:
@@ -45,7 +46,7 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
         
         if type(action) == DistillationAction:
             plot.print_header("DISTILLATION STARTED")
-            compressed_model = distil.perform_distillation(model, dataset, technique=action.technique, student_model=compressed_model,  settings = action.settings, writer=writer, device=device)
+            compressed_model = distil.perform_distillation(model, dataset, technique=action.technique, student_model=compressed_model,  settings = action.settings, save_path=save_path, writer=writer, device=device)
 
             
         if type(action) ==  QuantizationAction:

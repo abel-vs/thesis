@@ -56,7 +56,7 @@ def calibrate(model, data_loader, cap=None):
     model.eval()
     with torch.no_grad():
         i = 0
-        for data, _ in tqdm(data_loader, desc="Calibration"):
+        for data, _ in tqdm(data_loader, desc="Calibration", position=0, leave=True, dynamic_ncols=True):
             data = data.to(device)
             model(data)
             if cap is not None:
