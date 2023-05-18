@@ -42,13 +42,23 @@ class ExperimentManager:
         log_filename = f"{self.get_experiment_name()}.log"
         log_filepath = os.path.join(LOG_DIR, self.foldername, log_filename)
 
-        logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s - %(message)s',
-                            datefmt='%H:%M:%S',
-                            handlers=[logging.FileHandler(log_filepath), logging.StreamHandler()])
+        # Create a new logger instance
+        self.logger = logging.getLogger(self.get_experiment_name())
+        self.logger.setLevel(logging.INFO)
 
-        self.writer = SummaryWriter(log_dir=os.path.join(
-            LOG_DIR, self.foldername, "tensorboard"))
+        # Create handlers and formatter
+        file_handler = logging.FileHandler(log_filepath)
+        stream_handler = logging.StreamHandler()
+
+        formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%H:%M:%S')
+        file_handler.setFormatter(formatter)
+        stream_handler.setFormatter(formatter)
+
+        # Add handlers to the logger
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(stream_handler)
+
+        self.writer = SummaryWriter(log_dir=os.path.join(LOG_DIR, self.foldername, "tensorboard"))
 
     # Method to load model
     def load_model(self):

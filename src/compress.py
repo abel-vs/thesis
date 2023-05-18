@@ -35,7 +35,7 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
             else:
                 prunable_layers = None
                 
-            compressed_model = prune.channel_pruning(compressed_model, dataset, action.technique, action.sparsity, prunable_layers=prunable_layers, writer=writer, device=device, **action.settings)
+            compressed_model = prune.structure_pruning(compressed_model, dataset, action.technique, action.sparsity, prunable_layers=prunable_layers, writer=writer, device=device, **action.settings)
 
             new_params = eval.get_params(compressed_model)
             new_size = eval.get_size(compressed_model)

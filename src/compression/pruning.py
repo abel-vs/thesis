@@ -143,7 +143,7 @@ def get_pruner(model, example_inputs, type, ignored_layers, settings):
 
 
 # Method that applies channel pruning using a given technique
-def channel_pruning(
+def structure_pruning(
         model,
         dataset: DataSet,
         technique: PruningTechnique,
@@ -156,6 +156,7 @@ def channel_pruning(
         writer=None,
         save_path=None,
         device=None,
+        ignored_layers=[],
         **kwargs):
     
     if not inPlace:
@@ -171,9 +172,9 @@ def channel_pruning(
 
     # 1. ignore some layers that should not be pruned, e.g., the final classifier layer.
     if prunable_layers is None:
-        ignored_layers = get_layers_not_to_prune(model)
+        ignored_layers.extend(get_layers_not_to_prune(model))
     else:
-        ignored_layers = get_layers_not_to_prune(prunable_layers)
+        ignored_layers.extend(get_layers_not_to_prune(prunable_layers))
 
     print("Ignored layers: ", list(type(x).__name__ for x in ignored_layers))
     logging.info(
