@@ -5,7 +5,7 @@ sys.path.append('../src/')
 
 from torch.utils.tensorboard import SummaryWriter
 from src.compress import compress_model
-from src.interfaces.compression_actions import CompressionType, DistillationAction, PruningAction, QuantizationAction
+from src.interfaces.compression_actions import CompressionCategory, DistillationAction, PruningAction, QuantizationAction
 import src.interfaces.dataset_models as data
 import src.compression.quantization as quant
 import src.general as general
@@ -31,7 +31,7 @@ class ExperimentManager:
 
     def __init__(self, experiment_config, device=None, transforms=None):
         self.config = experiment_config
-        self.foldername = self.config["dataset"] + "/" + self.config["name"].lower() + "/" + self.config["type"] + "/" + str(self.config["target"])
+        self.foldername = self.config["dataset"] + "/" + self.config["name"].lower() + "/" + self.config["objective"] + "/" + str(self.config["target"])
         self.device = device if device is not None else general.get_device()
         self.transforms = transforms
 
@@ -57,6 +57,11 @@ class ExperimentManager:
         # Add handlers to the logger
         self.logger.addHandler(file_handler)
         self.logger.addHandler(stream_handler)
+
+        # Set the logger for the global logging module
+        logging.root = self.logger
+
+        logging.info("EXPERIMENT: " + self.get_experiment_name())
 
         self.writer = SummaryWriter(log_dir=os.path.join(LOG_DIR, self.foldername, "tensorboard"))
 
@@ -169,6 +174,10 @@ class ExperimentManager:
         logging.info('Experiment completed successfully')
 
         self.writer.close()
+        # Reset global logger
+        logging.getLogger().handlers = []
+
+        
 
 
 # Method to load config files
@@ -184,21 +193,22 @@ def load_yaml_file(file_path):
 # Method to create compression actions from config file
 def create_compression_action(action_dict):
     action_type = action_dict["type"]
-    if action_type == CompressionType.pruning:
+    if action_type == CompressionCategory.pruning:
         return PruningAction(
             name=action_dict["name"],
             technique=action_dict["technique"],
             sparsity=action_dict["sparsity"],
             strategy=action_dict["strategy"],
+            objective=action_dict["objective"],
             settings=action_dict.get("settings", {}),
         )
-    elif action_type == CompressionType.quantization:
+    elif action_type == CompressionCategory.quantization:
         return QuantizationAction(
             name=action_dict["name"],
             technique=action_dict["technique"],
             settings=action_dict.get("settings", {}),
         )
-    elif action_type == CompressionType.distillation:
+    elif action_type == CompressionCategory.distillation:
         return DistillationAction(
             name=action_dict["name"],
             technique=action_dict["technique"],

@@ -1,9 +1,11 @@
+import copy
 import os
 import torch
 import general
 import torch.nn.functional as F
 from op_counter import count_ops_and_params
 from src.interfaces.dataset_models import DataSet
+import time
 
 # Method that returns the model size in MB
 def get_size(model):
@@ -20,6 +22,8 @@ def get_params(model):
 
 # Method that returns the number of FLOPS the model executes
 def get_flops(model, example_input):
+    model = copy.deepcopy(model).cpu()
+    example_input = example_input.cpu()
     flops, _ = count_ops_and_params(model, example_input)
     return flops
 
@@ -42,6 +46,30 @@ def get_module_sparsity(module):
     100.0 * float(torch.sum(module.weight == 0)) / \
         float(module.weight.nelement())
 
+
+# Method that returns the batch and data duration of a model
+def get_inference_time(model, dataset: DataSet, device=None, quantized=False, cap=3):
+    if device is None:
+        device = general.get_device()
+    model.to(device)
+    model.eval()
+    start_time = time.time()
+    i = 0
+    with torch.no_grad():
+        for data, target in dataset.test_loader:
+            if quantized:
+                data = data.to(torch.uint8)
+            data, target = data.to(device), target.to(device)
+            model(data)
+            i += 1
+            if i >= cap:
+                break
+        end_time = time.time()
+    batch_duration = ((end_time - start_time) / cap ) * 1000
+    data_duration = batch_duration / data.shape[0]
+    return batch_duration, data_duration
+
+    
 
 # Method that tests the model and returns the metrics
 def get_metrics(model, dataset: DataSet, device=None):

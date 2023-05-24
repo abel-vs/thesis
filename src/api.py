@@ -1,27 +1,25 @@
 # Bring in lightweight dependencies
-from enum import Enum
-import os
 import sys
 sys.path.append("src")
 sys.path.append("../")
-from typing import List, Union
-from fastapi import Depends, FastAPI, File, UploadFile, Form
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import analysis
-from pydantic import BaseModel
 import json
-import general
+from tempfile import NamedTemporaryFile
+from typing import List
+
+import torch
+import torch.nn.functional as F
+import uvicorn
+from fastapi import Depends, FastAPI, File, Form, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+import analysis
+import evaluation as eval
 import plot
 import utils
-import importlib
-import torch
-from tempfile import SpooledTemporaryFile, NamedTemporaryFile
-import torchvision
-import torch.nn.functional as F
-import metrics
-import evaluation as eval
-from src.interfaces.dataset_models import supported_datasets
+from src.compress import compress_model
+from src.interfaces.compression_actions import create_compression_action
+from src.interfaces.dataset_models import get_supported_dataset
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -55,6 +53,8 @@ class APIModel(BaseModel):
 
 
 class AnalysisSettings(APIModel):
+    # Dataset used for the analysis.
+    dataset: str
     # Goal of the compression (model_size, inference_time, energy_usage).
     compression_goal: str
     # Target value that the model should achieve after compression, as percentage of the original value.
@@ -99,13 +99,19 @@ def analyze(
 ):
     print("Settings:", settings)
 
+    # Load the model
+    model_files = utils.prepare_model_params(model_state, model_architecture)
+    model = utils.import_model(*model_files, model_definition)
+    # Load the dataset
+    dataset = get_supported_dataset(settings.dataset)
+
     compression_actions = analysis.analyze(
-        model_state,
-        model_architecture,
+        model,
+        dataset,
         settings.compression_goal,
         settings.compression_target,
-        settings.performance_metric,
         settings.performance_target,
+        settings,
     )
 
     return {"compression_actions": compression_actions, "settings": settings}
@@ -124,17 +130,22 @@ def compress(
     model_files = utils.prepare_model_params(model_state, model_architecture)
     model = utils.import_model(*model_files, model_definition)
 
-    dataset = supported_datasets[settings.dataset]
+    dataset = get_supported_dataset(settings.dataset)
+
+
+    compression_actions = list(map(lambda action: create_compression_action(action, settings.compression_type), settings.actions))
+
+
+    plot.print_header("Compression Started")
 
     # Compress the model
-    compressed_model = general.compress_model(
-        model, dataset, settings.actions, settings)
+    compressed_model = compress_model(model, dataset, compression_actions)
 
     plot.print_header("Compression Complete")
 
     # Evaluate the compressed model
-    original_results = eval.test_and_get_results(model, dataset)
-    compressed_results = eval.test_and_get_results(compressed_model, dataset)
+    original_results = eval.get_results(model, dataset)
+    compressed_results = eval.get_results(compressed_model, dataset)
 
     # Save the compressed model into a temporary file
     compressed_model_file = NamedTemporaryFile(suffix=".pth", delete=False)
@@ -151,24 +162,27 @@ def compress(
 
 # Evaluate the performance of the model and return the results
 @app.post("/evaluate")
-def compress(
+def evaluate(
     dataset: str = Form(...),
     model_definition: ModelDefinition = Form(...),
     model_state: UploadFile = File(...),
     model_architecture: UploadFile = File(...),
 ):
+    
+    print("Evaluating model...")
 
     # Load the model
     model_files = utils.prepare_model_params(model_state, model_architecture)
+    print("Check")
     model = utils.import_model(*model_files, model_definition)
 
-    dataset = supported_datasets[dataset]
+    dataset = get_supported_dataset(dataset)
 
     print("Model:", model)
     print("Dataset:", dataset)
 
     # Evaluate the compressed model
-    results = eval.test_and_get_results(model, dataset)
+    results = eval.get_results(model, dataset)
 
     print("Results:", results)
 
@@ -177,7 +191,7 @@ def compress(
 
 # Analze the given model and return suggested compression actions
 @app.post("/get-modules-methods")
-async def analyze(
+async def get_modules(
     file: UploadFile = File(...),
 ):
 

@@ -27,6 +27,7 @@ def soft_target_distillation(teacher, student, dataset, distil_criterion, optimi
     for data, target in tqdm(dataset.train_loader, desc="Distillation Training", position=0, leave=True, dynamic_ncols=True):
         # Move data to the appropriate device
         data = data.to(device)
+        target = target.to(device)
 
         # Compute the soft target probabilities from the teacher model
         with torch.no_grad():
@@ -69,6 +70,7 @@ def hard_target_distillation(teacher, student, dataset, distil_criterion, optimi
     for data, target in tqdm(dataset.train_loader, desc="Distillation Training", position=0, leave=True, dynamic_ncols=True):
         # Move data to the appropriate device
         data = data.to(device)
+        target = target.to(device)
 
         # Compute the hard target labels from the teacher model
         with torch.no_grad():
@@ -193,7 +195,12 @@ def distillation_train_loop(
         # Validate the student model before training
         start_metrics = general.validate(student, dataset, device=device)
         score = start_metrics[1]
-        logging.info('Start Score: {}'.format(score))
+        print('Start Score: {}'.format(score))
+
+        best_score = score
+        best_model = copy.deepcopy(student)
+        if save_path is not None:
+            torch.save(best_model, save_path)
 
         it = 0
 
@@ -216,6 +223,11 @@ def distillation_train_loop(
             # Validate the student model
             val_metrics = general.validate(student, dataset, device=device)
 
+            # Get scores
+            distil_score = distil_metrics["score"]
+            score = val_metrics[1]
+
+            # Log metrics
             if writer is not None:
                 plot.log_metrics("distillation", "train",
                                  distil_metrics, it, writer)
@@ -224,15 +236,12 @@ def distillation_train_loop(
                     "score": val_metrics[1],
                 }, it, writer)
 
-            distil_score = distil_metrics["score"]
-            score = val_metrics[1]
-
-            logging.info('Distillation Score: {:.3f}; Validation Score: {:.3f}'.format(
+            print('Distillation Score: {:.3f}; Validation Score: {:.3f}'.format(
                 distil_score, score))
 
             # If the score is above the threshold, stop training
-            if score > target:
-                logging.info("Stopped training because target ({}) was reached: {:.3f}".format(
+            if score > 98:
+                print("Stopped training because target ({}) was reached: {:.3f}".format(
                     target, score))
                 break
 
@@ -247,7 +256,7 @@ def distillation_train_loop(
                 epochs_without_improvement += 1
 
         if epochs_without_improvement >= patience:
-            logging.info("Stopped training because score did not improve for {} epochs".format(
+            print("Stopped training because score did not improve for {} epochs".format(
                 patience))
 
         student = best_model
@@ -262,17 +271,17 @@ def distillation_train_loop(
             # Validate the student model
             metrics = general.validate(student, dataset)
             score = metrics[1]
-            logging.info('Score: {}'.format(score))
-        logging.info("Stopped training after {} epochs".format(epochs))
+            print('Score: {}'.format(score))
+        print("Stopped training after {} epochs".format(epochs))
 
     return student
 
 
 # Method that creates a student model based on the teacher model
-def create_student_model(teacher_model, dataset: DataSet, fineTune=True):
+def create_student_model(teacher_model, dataset: DataSet, finetune=True):
     teacher_model = copy.deepcopy(teacher_model)
     prune.structure_pruning(
-        teacher_model, dataset, sparsity=0.5, fineTune=fineTune)
+        teacher_model, dataset, sparsity=0.5, finetune=finetune)
     return teacher_model
 
 

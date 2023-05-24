@@ -17,8 +17,8 @@ from datasets import load_dataset
 use_cuda = True
 kwargs = {'num_workers': 8, 'pin_memory': True} if use_cuda else {}
 
-DATA_DIR = "/workspace/volume/data"
-CACHE_DIR = "/workspace/volume/cache"
+DATA_DIR = "../../volume/data"
+CACHE_DIR = "../../volume/cache"
 
 """ General Dataset Class """
 

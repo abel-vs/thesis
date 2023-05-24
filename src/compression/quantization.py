@@ -20,8 +20,9 @@ class QuantizedModelWrapper(nn.Module):
         return self.dequant(x)
 
 
-# Method that performs static quantization on a model
-def static_quantization(model, dataset, backend="fbgemm", fuse=False):
+
+
+def static_quantization(model, dataset, backend="fbgemm", fuse=False, device=None):
     # Decouple the quantized model from the original model
     model = copy.deepcopy(model)
 
@@ -35,23 +36,28 @@ def static_quantization(model, dataset, backend="fbgemm", fuse=False):
     # Set the backend to use for quantization
     # 'fbgemm' for server (x86), 'qnnpack' for mobile (ARM)
     # TODO: Create option to set backend in front-end, e.g. "what device will the model be deployed on?"
-    model.qconfig = torch.quantization.get_default_qconfig(backend)
 
+    # Set qconfig for the entire model to use per_tensor_affine
+    quantized_model.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')
+    
     # Prepare the model for quantization
-    torch.quantization.prepare(quantized_model, inplace=True)
+    quantized_model = torch.ao.quantization.prepare(quantized_model)
 
     # Calibrate with the training set
-    calibrate(quantized_model, dataset.train_loader, cap=100)
+    calibrate(quantized_model, dataset.train_loader, cap=20, device=device)
+
+    quantized_model.cpu()
 
     # Convert the model to a quantized model
-    torch.quantization.convert(quantized_model, inplace=True)
+    quantized_model = torch.ao.quantization.convert(quantized_model)
+    
 
     return quantized_model
 
-
 # Method that calibrates a model for quantization
-def calibrate(model, data_loader, cap=None):
-    device = general.get_device()
+def calibrate(model, data_loader, cap=None, device=None):
+    if device is None:
+        device = general.get_device()
     model.to(device)
     model.eval()
     with torch.no_grad():

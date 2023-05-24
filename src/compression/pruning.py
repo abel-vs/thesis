@@ -10,8 +10,10 @@ import general
 from src import plot
 import src.analysis as analysis
 from src.interfaces.dataset_models import DataSet
+from src.interfaces.objectives import CompressionObjective
+from src.interfaces.strategies import PruningStrategy
 from src.interfaces.techniques import PruningTechnique
-
+import src.evaluation as eval
 
 """ UNSTRUCTURED PRUNING """
 
@@ -37,54 +39,6 @@ def unstructured_magnitude_pruning(model, rate):
 
 
 """ STRUCTURED PRUNING """
-
-# Method that gets first and last layer
-# TODO: this method should find the final layer in a general way, we can't assume the final layer is the last module, since it depends on the forward function.
-
-
-def get_first_last_layers(model):
-    if isinstance(model, list):
-        layers = model
-    elif isinstance(model, torch.nn.Module):
-        layers = analysis.flatten_layers(model)
-    else:
-        raise Exception("Model must be a list or torch.nn.Module")
-    return [layers[0], layers[-1]]
-
-
-# Method to get the layers that should be ignored.
-def get_layers_not_to_prune(model):
-    layers_not_to_prune = []
-    previous_module = None
-
-    first_last_layers = get_first_last_layers(model)
-    layers_not_to_prune.extend(first_last_layers)
-
-    # Flatten if not yet flattened
-    if not isinstance(model, list):
-        model = analysis.flatten_layers(model)
-
-    for module in model:
-        # # Skip input and output layers
-        # if isinstance(module, nn.Conv2d) and (previous_module is None or isinstance(previous_module, nn.Linear)):
-        #     layers_not_to_prune.append(module)
-        #     continue
-
-        # # Skip batch normalization layers
-        # if isinstance(module, nn.BatchNorm2d):
-        #     layers_not_to_prune.append(module)
-        #     continue
-
-        # # Skip shortcut connections and first and last layers in each residual block
-        # if isinstance(module, nn.Conv2d):
-        #     if isinstance(previous_module, nn.ReLU) or isinstance(previous_module, nn.Conv2d):
-        #         layers_not_to_prune.append(module)
-        #         continue
-
-        previous_module = module
-
-    return layers_not_to_prune
-
 
 # Method that estimates the required channel sparsity to reach a target global sparsity
 def calculate_channel_sparsity(model: nn.Module, target_global_sparsity: float) -> List[float]:
@@ -120,7 +74,7 @@ def get_pruner(model, example_inputs, type, ignored_layers, settings):
         imp = tp.importance.RandomImportance()
         pruner = tp.pruner.MagnitudePruner
     elif type == "l1":
-        imp = tp.importance.MagnitudeImportance(p=1)
+        imp = tp.importance.MagnitudeImportance(p=2)
         pruner = tp.pruner.MagnitudePruner
     elif type == "lamp":
         imp = tp.importance.LAMPImportance(p=2)
@@ -131,6 +85,9 @@ def get_pruner(model, example_inputs, type, ignored_layers, settings):
     elif type == "group_norm":
         imp = tp.importance.GroupNormImportance(p=2)
         pruner = tp.pruner.GroupNormPruner
+    elif type == "group_lamp":
+        imp = tp.importance.LAMPImportance(p=2)
+        pruner = tp.pruner.GroupNormPruner
     else:
         raise NotImplementedError
 
@@ -139,30 +96,38 @@ def get_pruner(model, example_inputs, type, ignored_layers, settings):
                   importance=imp,
                   iterative_steps=settings["iterative_steps"],
                   ch_sparsity=settings["sparsity"],
-                  ignored_layers=ignored_layers)
+                  ignored_layers=ignored_layers,
+                  global_pruning=True
+                  )
 
 
 # Method that applies channel pruning using a given technique
 def structure_pruning(
         model,
         dataset: DataSet,
-        technique: PruningTechnique,
         sparsity: float,
-        fineTune=False,
-        iterative_steps=3,
-        prunable_layers=None,
+        technique: PruningTechnique,
+        strategy: PruningStrategy,
+        objective: CompressionObjective,
+        finetune=False,
+        finetune_epochs=1,
+        iterative_steps=100,
         optimizer=None,
-        inPlace=True,
+        inplace=True,
         writer=None,
         save_path=None,
         device=None,
-        ignored_layers=[],
+        ignored_layers=None,
         **kwargs):
-    
-    if not inPlace:
+
+    if not inplace:
         model = copy.deepcopy(model)
     model.to(device)
-    example_inputs = general.get_example_inputs(dataset.train_loader, device=device)
+    example_inputs = general.get_example_inputs(
+        dataset.train_loader, device=device)
+    
+    if objective == "flops":
+        iterative_steps = 20
 
     # TODO: optimizer should be able to be created in a smart way
     if optimizer is None:
@@ -171,28 +136,59 @@ def structure_pruning(
         # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
     # 1. ignore some layers that should not be pruned, e.g., the final classifier layer.
-    if prunable_layers is None:
-        ignored_layers.extend(get_layers_not_to_prune(model))
-    else:
-        ignored_layers.extend(get_layers_not_to_prune(prunable_layers))
+    ignored_layers = set() if ignored_layers is None else set(ignored_layers.copy())
+    ignored_layers.update(analysis.get_layers_to_ignore(model, strategy))
 
-    print("Ignored layers: ", list(type(x).__name__ for x in ignored_layers))
+    first_layer, last_layer = analysis.get_first_last_layers(model)
+    ignored_layers.update([first_layer, last_layer])
+
+    print(f"Ignored layers: {list(type(x).__name__ for x in ignored_layers)}")
+
     logging.info(
         f"Ignored layers: {list(type(x).__name__ for x in ignored_layers)}")
 
     # 2. Pruner initialization
     pruner = get_pruner(model, example_inputs, technique, ignored_layers, {
-                        "iterative_steps": iterative_steps, "sparsity": sparsity})
+                        "iterative_steps": iterative_steps, "sparsity": 0.9})
+
+    if objective == "size":
+        original_params = eval.get_params(model)
+        target = int(original_params * (1 - sparsity))
+    elif objective == "flops":
+        original_flops = eval.get_flops(model, example_inputs)
+        target = int(original_flops * (1 - sparsity))
+    elif objective == "time":
+        original_time = eval.get_inference_time(model, dataset)
+        target = original_time * (1 - sparsity)
+    else:
+        raise NotImplementedError
 
     # 3. Pruning
     for i in range(iterative_steps):
         pruner.step()  # Removes the least important channels from the model
-        if fineTune:
+        if finetune:
             plot.print_header(f"Pruning step {i+1}/{iterative_steps}")
-            general.finetune(model, dataset, target=99, patience=3, optimizer=optimizer,
-                             writer=writer, writer_tag=f"pruning_{(i+1)/iterative_steps*sparsity}", **kwargs)
+            general.finetune(model, dataset, target=99, patience=1, optimizer=optimizer,
+                             writer=writer, writer_tag=f"pruning_{(i+1)/iterative_steps*sparsity}", max_it=finetune_epochs, ** kwargs)
             if save_path is not None:
                 torch.save(
                     model, f"{save_path}/pruned_{(i+1)/iterative_steps*sparsity}.pt")
+
+
+        if objective == "size":
+            params = eval.get_params(model)
+            if params < target:
+                break
+        elif objective == "flops":
+            flops = eval.get_flops(model, example_inputs)
+            if flops < target:
+                break
+        elif objective == "time":
+            time = eval.get_inference_time(model, dataset)
+            if time < target:
+                break
+
+    # 4. Remove the pruner from the model
+    del pruner
 
     return model

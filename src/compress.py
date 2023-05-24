@@ -11,7 +11,7 @@ import src.evaluation as eval
 import src.analysis as analysis
 
 from typing import List
-from src.interfaces.compression_actions import CompressionAction, DistillationAction, PruningAction, QuantizationAction
+from src.interfaces.compression_actions import CompressionAction, DistillationAction, PruningAction, QuantizationAction, order_compression_actions
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -21,6 +21,10 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
     compressed_model = copy.deepcopy(model)
     model.eval() # Original model shouldn't be changed
 
+    print("Compression Actions:", compression_actions)
+
+    compression_actions = order_compression_actions(compression_actions)
+
     for action in compression_actions:
         if type(action) == PruningAction:
             plot.print_header("PRUNING STARTED")
@@ -28,18 +32,21 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
             old_params = eval.get_params(compressed_model)
             old_size = eval.get_size(compressed_model)
 
-            if action.strategy == PruningStrategy.OnlyLinear:
-                prunable_layers = analysis.get_linear_layers(model)
-            elif action.strategy == PruningStrategy.OnlyConv:
-                prunable_layers = analysis.get_conv_layers(model)
+            if action.sparsity > 1:
+                sparsity = action.sparsity / 100
             else:
-                prunable_layers = None
+                sparsity = action.sparsity 
                 
-            compressed_model = prune.structure_pruning(compressed_model, dataset, action.technique, action.sparsity, prunable_layers=prunable_layers, writer=writer, device=device, **action.settings)
+            compressed_model = prune.structure_pruning(compressed_model, dataset, sparsity, action.technique,  action.strategy, action.objective, writer=writer, device=device, **action.settings)
 
             new_params = eval.get_params(compressed_model)
             new_size = eval.get_size(compressed_model)
             
+            print("Pruning Results:")
+            print("Old Params: %d, New Params: %d, Reduction: %.2f", old_params, new_params, 1 - (new_params / old_params))
+            print("Old Size: %.2f, New Size: %.2f, Reduction: %.2f", old_size, new_size, 1 - (new_size / old_size))
+
+
             logging.info("Pruning Results:")
             logging.info("Old Params: %d, New Params: %d, Reduction: %.2f", old_params, new_params, 1 - (new_params / old_params))
             logging.info("Old Size: %.2f, New Size: %.2f, Reduction: %.2f", old_size, new_size, 1 - (new_size / old_size))
@@ -53,6 +60,7 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
             plot.print_header("QUANTIZATION STARTED")
             compressed_model = quant.dynamic_quantization(compressed_model)
 
-    writer.close()
+    if writer is not None:
+        writer.close()
 
     return compressed_model

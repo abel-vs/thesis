@@ -149,6 +149,8 @@ def import_model(model_state_file, model_architecture_file, model_definition):
     else:
         raise ValueError(
             f"Unknown model_definition type: {model_definition.type}")
+    
+    print("Model type:", model)
 
     # Load the state dictionary from the .pth file
     (state_type, state_object) = detect_pth_data_type(model_state_file)

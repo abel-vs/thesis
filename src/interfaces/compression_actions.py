@@ -1,27 +1,28 @@
 
 import torch.nn.functional as F
 from enum import Enum
+from src.interfaces.objectives import CompressionObjective
 from src.interfaces.strategies import PruningStrategy
 from src.interfaces.techniques import DistillationTechnique, PruningTechnique, QuantizationTechnique
 
-
-class CompressionType(str, Enum):
+class CompressionCategory(str, Enum):
     pruning = "pruning"
     quantization = "quantization"
     distillation = "distillation"
 
 class CompressionAction:
     """ Class that represents a compression action."""
-    def __init__(self, type: CompressionType, name: str):
+    def __init__(self, type: CompressionCategory, name: str):
         self.type = type
         self.name = name
 
 
 class PruningAction(CompressionAction):
     """ Class that represents a pruning action. """
-    def __init__(self, name: str, technique: PruningTechnique,  sparsity: float, strategy: PruningStrategy, settings: dict = {}):
-        super().__init__(CompressionType.pruning, name)
+    def __init__(self, name: str, technique: PruningTechnique,  sparsity: float, strategy: PruningStrategy, objective: CompressionObjective, settings: dict = {}):
+        super().__init__(CompressionCategory.pruning, name)
 
+        self.objective = objective 
         self.technique = technique 
         self.strategy = strategy
         self.sparsity = sparsity
@@ -38,7 +39,7 @@ class PruningAction(CompressionAction):
 class QuantizationAction(CompressionAction):
     """ Class that represents a quantization action. """
     def __init__(self, name: str, technique: QuantizationTechnique, settings: dict = {}):
-        super().__init__(CompressionType.quantization, name)
+        super().__init__(CompressionCategory.quantization, name)
 
         self.technique = technique 
         self.quantization_bits = settings.get("quantization_bits", 8)
@@ -54,7 +55,7 @@ class QuantizationAction(CompressionAction):
 class DistillationAction(CompressionAction):
     """ Class that represents a distillation action. """
     def __init__(self, name: str, technique: DistillationTechnique, settings: dict = {}):
-        super().__init__(CompressionType.distillation, name)
+        super().__init__(CompressionCategory.distillation, name)
 
         self.technique = technique
         self.distillation_loss = settings.get("distillation_loss", F.mse_loss)
@@ -65,3 +66,45 @@ class DistillationAction(CompressionAction):
 
     def __repr__(self):
         return str(self)
+    
+def order_compression_actions(compression_actions):
+    # Define the order of the compression categories
+    category_order = {
+        CompressionCategory.pruning: 0,
+        CompressionCategory.distillation: 1,
+        CompressionCategory.quantization: 2
+    }
+
+    # Sort the actions based on the category order
+    sorted_actions = sorted(compression_actions, key=lambda action: category_order[action.type])
+
+    return sorted_actions
+    
+
+
+# Method to create compression actions from config file
+def create_compression_action(action_dict, objective: CompressionObjective):
+    action_type = action_dict["type"]
+    if action_type == CompressionCategory.pruning:
+        return PruningAction(
+            name=action_dict["name"],
+            technique=action_dict["technique"],
+            sparsity=action_dict["sparsity"],
+            strategy=action_dict["strategy"],
+            objective=objective,
+            settings=action_dict.get("settings", {}),
+        )
+    elif action_type == CompressionCategory.quantization:
+        return QuantizationAction(
+            name=action_dict["name"],
+            technique=action_dict["technique"],
+            settings=action_dict.get("settings", {}),
+        )
+    elif action_type == CompressionCategory.distillation:
+        return DistillationAction(
+            name=action_dict["name"],
+            technique=action_dict["technique"],
+            settings=action_dict.get("settings", {}),
+        )
+    else:
+        raise ValueError(f"Unknown compression action type: {action_type}")
