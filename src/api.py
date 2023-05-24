@@ -1,6 +1,9 @@
 # Bring in lightweight dependencies
 from enum import Enum
 import os
+import sys
+sys.path.append("src")
+sys.path.append("../")
 from typing import List, Union
 from fastapi import Depends, FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,12 +17,11 @@ import utils
 import importlib
 import torch
 from tempfile import SpooledTemporaryFile, NamedTemporaryFile
-import mnist
 import torchvision
 import torch.nn.functional as F
 import metrics
 import evaluation as eval
-from src.models.dataset_models import supported_datasets
+from src.interfaces.dataset_models import supported_datasets
 
 HOST = "127.0.0.1"
 PORT = 8000
