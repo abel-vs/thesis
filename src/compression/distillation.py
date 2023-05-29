@@ -39,9 +39,12 @@ def soft_target_distillation(teacher, student, dataset, distil_criterion, optimi
         # Zero the gradients before computing the loss
         optimizer.zero_grad()
 
+        temperature = 2.0  # Tune this
+        teacher_output = F.softmax(teacher_output / temperature, dim=-1)
+        student_output = F.log_softmax(student_output / temperature, dim=-1)
+
         # Compute the loss and gradient
-        distill_loss = distil_criterion(
-            student_output, teacher_output.detach())
+        distill_loss = distil_criterion(student_output, teacher_output.detach())
         distill_loss.backward()
 
         # Update the student model's parameters
@@ -84,8 +87,7 @@ def hard_target_distillation(teacher, student, dataset, distil_criterion, optimi
         optimizer.zero_grad()
 
         # Compute the loss and gradient
-        distill_loss = distil_criterion(
-            student_output, hard_target_labels.detach())
+        distill_loss = distil_criterion(student_output, hard_target_labels.detach())
         distill_loss.backward()
 
         # Update the student model's parameters
@@ -112,7 +114,7 @@ def get_distil_method(technique):
         raise ValueError("Invalid distillation technique")
 
 
-def combined_loss_distillation(teacher, student, dataset, distil_criterion, optimizer, device, alpha=0.2, temperature=1.5):
+def combined_loss_distillation(teacher, student, dataset, distil_criterion, optimizer, device, alpha=0.5, temperature=2):
 
     teacher.to(device).eval()
     student.to(device).train()
@@ -130,8 +132,7 @@ def combined_loss_distillation(teacher, student, dataset, distil_criterion, opti
         # Compute the soft target probabilities from the teacher model
         with torch.no_grad():
             teacher_output = teacher(data)
-            teacher_soft_target = F.softmax(
-                teacher_output / temperature, dim=1)
+            teacher_soft_target = F.softmax(teacher_output / temperature, dim=1)
 
         # Compute the output probabilities of the student model
         student_output = student(data)
@@ -195,7 +196,7 @@ def distillation_train_loop(
         # Validate the student model before training
         start_metrics = general.validate(student, dataset, device=device)
         score = start_metrics[1]
-        print('Start Score: {}'.format(score))
+        logging.info('Start Score: {}'.format(score))
 
         best_score = score
         best_model = copy.deepcopy(student)
@@ -236,12 +237,12 @@ def distillation_train_loop(
                     "score": val_metrics[1],
                 }, it, writer)
 
-            print('Distillation Score: {:.3f}; Validation Score: {:.3f}'.format(
+            logging.info('Distillation Score: {:.3f}; Validation Score: {:.3f}'.format(
                 distil_score, score))
 
             # If the score is above the threshold, stop training
-            if score > 98:
-                print("Stopped training because target ({}) was reached: {:.3f}".format(
+            if score > target:
+                logging.info("Stopped training because target ({}) was reached: {:.3f}".format(
                     target, score))
                 break
 
@@ -256,7 +257,7 @@ def distillation_train_loop(
                 epochs_without_improvement += 1
 
         if epochs_without_improvement >= patience:
-            print("Stopped training because score did not improve for {} epochs".format(
+            logging.info("Stopped training because score did not improve for {} epochs".format(
                 patience))
 
         student = best_model
@@ -266,13 +267,13 @@ def distillation_train_loop(
         for e in range(epochs):
             # Train the student model
             distil_technique(teacher, student, dataset,
-                             distil_criterion, optimizer)
+                             distil_criterion, optimizer, device)
 
             # Validate the student model
             metrics = general.validate(student, dataset)
             score = metrics[1]
-            print('Score: {}'.format(score))
-        print("Stopped training after {} epochs".format(epochs))
+            logging.info('Score: {}'.format(score))
+        logging.info("Stopped training after {} epochs".format(epochs))
 
     return student
 
@@ -286,12 +287,11 @@ def create_student_model(teacher_model, dataset: DataSet, finetune=True):
 
 
 # Method that performs the whole distillation procedure
-def perform_distillation(model, dataset: DataSet, technique=DistillationTechnique.CombinedLoss, student_model=None,  settings: dict = {}, writer: SummaryWriter = None, device=None, save_path=None, **kwargs):
+def perform_distillation(model, dataset: DataSet, technique=DistillationTechnique.CombinedLoss, distil_criterion=F.kl_div, student_model=None,  settings: dict = {}, writer: SummaryWriter = None, device=None, save_path=None, **kwargs):
 
     # Extract settings
     # TODO: Find intelligent way to set the following properties
     performance_target = settings.get("performance_target", None)
-    distil_criterion = settings.get("distil_criterion", F.cross_entropy)
     optimizer = settings.get("optimizer", optim.SGD(
         student_model.parameters(), lr=0.01, momentum=0.5))
     patience = settings.get("patience", 3)
@@ -300,7 +300,7 @@ def perform_distillation(model, dataset: DataSet, technique=DistillationTechniqu
 
     # Create student model if not provided
     if student_model is None:
-        plot.print_header("Creating student model")
+        plot.logging.info_header("Creating student model")
         student_model = create_student_model(model, dataset)
 
     compressed_model = distillation_train_loop(

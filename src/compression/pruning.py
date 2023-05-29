@@ -166,6 +166,11 @@ def structure_pruning(
     # 3. Pruning
     for i in range(iterative_steps):
         pruner.step()  # Removes the least important channels from the model
+
+        if writer is not None:
+            score = general.validate(model, dataset, device=device)[1]
+            writer.add_scalars(f"score/pruning", {"Score": score}, i+1)
+
         if finetune:
             plot.print_header(f"Pruning step {i+1}/{iterative_steps}")
             general.finetune(model, dataset, target=99, patience=1, optimizer=optimizer,

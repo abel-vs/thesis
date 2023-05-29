@@ -54,11 +54,19 @@ class QuantizationAction(CompressionAction):
 
 class DistillationAction(CompressionAction):
     """ Class that represents a distillation action. """
-    def __init__(self, name: str, technique: DistillationTechnique, settings: dict = {}):
+    def __init__(self, name: str, technique: DistillationTechnique, performance_target: float, settings: dict = {}):
         super().__init__(CompressionCategory.distillation, name)
 
         self.technique = technique
-        self.distillation_loss = settings.get("distillation_loss", F.mse_loss)
+        self.performance_target = settings.get("performance_target", 100)
+        if technique == "soft_target":
+            self.distillation_loss = settings.get("distillation_loss", F.kl_div)
+        elif technique == "hard_target":
+            self.distillation_loss = settings.get("distillation_loss", F.cross_entropy)  
+        elif technique == "combined_loss":
+            self.distillation_loss = settings.get("distillation_loss", F.kl_div)
+        else:
+            self.distillation_loss = settings.get("distillation_loss", F.mse_loss)  
         self.settings = settings  # Use settings to set all the necessary kwargs
 
     def __str__(self):
@@ -83,7 +91,7 @@ def order_compression_actions(compression_actions):
 
 
 # Method to create compression actions from config file
-def create_compression_action(action_dict, objective: CompressionObjective):
+def create_compression_action(action_dict):
     action_type = action_dict["type"]
     if action_type == CompressionCategory.pruning:
         return PruningAction(
@@ -91,7 +99,7 @@ def create_compression_action(action_dict, objective: CompressionObjective):
             technique=action_dict["technique"],
             sparsity=action_dict["sparsity"],
             strategy=action_dict["strategy"],
-            objective=objective,
+            objective=action_dict["objective"],
             settings=action_dict.get("settings", {}),
         )
     elif action_type == CompressionCategory.quantization:
@@ -104,6 +112,7 @@ def create_compression_action(action_dict, objective: CompressionObjective):
         return DistillationAction(
             name=action_dict["name"],
             technique=action_dict["technique"],
+            performance_target = action_dict["performance_target"],
             settings=action_dict.get("settings", {}),
         )
     else:

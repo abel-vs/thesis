@@ -110,6 +110,8 @@ def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
 
 
 def is_quantized(model):
+    if isinstance(model, QuantizedModelWrapper):
+        return True
     for module in model.modules():
         if isinstance(module, QuantStub) or isinstance(module, DeQuantStub) or isinstance(module, FakeQuantize):
             return True
