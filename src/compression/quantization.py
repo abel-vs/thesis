@@ -3,6 +3,9 @@ from enum import Enum
 import torch
 import torch.nn as nn
 from torch.quantization import QuantStub, DeQuantStub, FakeQuantize
+from torch.ao.quantization import get_default_qconfig
+from torch.ao.quantization.quantize_fx import prepare_fx, convert_fx
+from torch.ao.quantization import QConfigMapping
 from tqdm import tqdm
 import general
 
@@ -22,34 +25,31 @@ class QuantizedModelWrapper(nn.Module):
 
 
 
-def static_quantization(model, dataset, backend="fbgemm", fuse=False, device=None):
+def static_quantization(model, dataset, backend="x86", device=None):
     # Decouple the quantized model from the original model
-    model = copy.deepcopy(model)
+    quantized_model = copy.deepcopy(model)
 
-    # Wrap the model in a QuantizedModelWrapper
-    quantized_model = QuantizedModelWrapper(model)
-
-    # Fuse layers if specified
-    if fuse:
-        fuse_modules(quantized_model)
+    example_inputs = general.get_example_inputs(dataset.train_loader, device=device)
 
     # Set the backend to use for quantization
     # 'fbgemm' for server (x86), 'qnnpack' for mobile (ARM)
     # TODO: Create option to set backend in front-end, e.g. "what device will the model be deployed on?"
 
     # Set qconfig for the entire model to use per_tensor_affine
-    quantized_model.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')
+    qconfig = get_default_qconfig(backend)
+    qconfig_mapping = QConfigMapping().set_global(qconfig)
     
     # Prepare the model for quantization
-    quantized_model = torch.ao.quantization.prepare(quantized_model)
+    quantized_model = prepare_fx(quantized_model, qconfig_mapping, example_inputs)
 
     # Calibrate with the training set
     calibrate(quantized_model, dataset.train_loader, cap=20, device=device)
 
+    # Set the model to cpu
     quantized_model.cpu()
 
     # Convert the model to a quantized model
-    quantized_model = torch.ao.quantization.convert(quantized_model)
+    quantized_model = convert_fx(quantized_model)
     
 
     return quantized_model
