@@ -1,111 +1,278 @@
+from enum import Enum
 import torch
+import torch.nn as nn
 
-from compression_models import CompressionAction, CompressionType
+from src.interfaces.compression_actions import CompressionAction, CompressionCategory, DistillationAction, PruningAction, QuantizationAction
+from src.interfaces.objectives import CompressionObjective
+from src.interfaces.strategies import PruningStrategy
+from src.interfaces.techniques import DistillationTechnique, PruningTechnique, QuantizationTechnique
+import src.general as general
+import src.evaluation as eval
 
-PRUNE_PERCENTAGE = 0.5
-
-
-def get_modules(model):
-    modules = []
-    for name, module in model.named_modules():
-        if name != "":
-            modules.append(module)
-    return modules
-
-
-def get_module_type(module):
-    return type(module).__name__
+class ModelCategory(str, Enum):
+    cnn = "cnn"
+    transformer = "transformer"
 
 
-def get_model_types(model):
-    modules = get_modules(model)
-    types = []
+""" General """
+
+# Method that returns list of layers of a model
+def flatten_layers(model):
+    flat_layers = []
+    for layer in model.children():
+        children = list(layer.children())
+        if len(children) > 0:
+            flat_layers.extend(flatten_layers(layer))
+        else:
+            flat_layers.append(layer)
+    return flat_layers
+
+def get_first_last_layers(model):
+    if isinstance(model, list):
+        layers = model
+    elif isinstance(model, torch.nn.Module):
+        layers = flatten_layers(model)
+    else:
+        raise Exception("Model must be a list or torch.nn.Module")
+    return [layers[0], layers[-1]]
+
+
+""" Analyzing Layers """
+
+# Method that returns list of types of layers of a model
+def get_layer_types_with_counts(model):
+    modules = flatten_layers(model)
+    types = {}
     for module in modules:
-        types.append(get_module_type(module))
+        module_type = type(module)
+        if module_type in types:
+            types[module_type] += 1
+        else:
+            types[module_type] = 1
     return types
 
+# Method that returns list of types of layers of a model with their parameter counts
+def get_layer_types_with_parameter_counts(model, ignored_layers=[]):
+    modules = flatten_layers(model)
+    types_with_params = {}
+    
+    for module in modules:
+        if module in ignored_layers:
+            continue
+
+        module_type = type(module)
+        num_parameters = eval.get_params(module)
+        
+        if module_type in types_with_params:
+            types_with_params[module_type] += num_parameters
+        else:
+            types_with_params[module_type] = num_parameters
+
+    types_with_params = sorted(types_with_params.items(), key=lambda x: x[1], reverse=True)
+            
+    return types_with_params
+
+
+# Method that returns a dict with the types of layers of a model and their percentage of the total parameter count
+def get_layer_types_with_parameter_percentage(model, ignored_layers=[]):
+    types_with_params = get_layer_types_with_parameter_counts(model, ignored_layers=ignored_layers)
+    total_params = sum([param_count for layer_type, param_count in types_with_params])
+    types_with_percentage = []
+
+    for layer_type, param_count in types_with_params:
+        percentage = (param_count / total_params) * 100
+        types_with_percentage.append((layer_type, percentage))
+
+    types_with_percentage.sort(key=lambda x: x[1], reverse=True)
+
+    return types_with_percentage
+
+
+# Method that returns a list of layers to prune to reach a certain compression goal
+def get_layers_to_prune(model, compression_goal, ignored_layers=[]):
+    sorted_layers = get_layer_types_with_parameter_percentage(model, ignored_layers=ignored_layers)
+    accumulated_percentage = 0
+    layers_to_prune = []
+
+    for layer in sorted_layers:
+        # allow 5 percent at minimum to remain
+        prunable_percentage = layer[1]*0.95
+        accumulated_percentage += prunable_percentage
+        layers_to_prune.append(layer[0])
+
+        if accumulated_percentage >= compression_goal:
+            break
+
+    return layers_to_prune
+
+# Method that selects a strategy based on the types of layers in a model
+def get_pruning_strategy(prunable_layers, objective: CompressionObjective, compression_target: int, performance_target: int):
+    has_conv = any(isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d)) for layer in prunable_layers)
+    has_linear = any(isinstance(layer, nn.Linear) for layer in prunable_layers)
+
+    if has_conv and has_linear:
+        return PruningStrategy.Global
+    elif has_conv:
+        return PruningStrategy.OnlyConv
+    elif has_linear:
+        return PruningStrategy.OnlyLinear
+    else:
+        return PruningStrategy.Global
+
+
+def get_pruning_technique(model, dataset, objective: CompressionObjective, strategy: PruningStrategy, compression_target: int, performance_target: int, ):
+    architecture = detect_model_category(model)
+
+    if architecture == ModelCategory.cnn:
+        if objective == CompressionObjective.Size:
+            if strategy == PruningStrategy.OnlyLinear:
+                return PruningTechnique.LAMP
+            elif strategy == PruningStrategy.Global:
+                return PruningTechnique.L1
+            elif strategy == PruningStrategy.OnlyConv:
+                return PruningTechnique.GroupNorm
+            else:
+                raise Exception("Unknown strategy")
+        elif objective == CompressionObjective.Time:
+            if strategy == PruningStrategy.OnlyLinear:
+                return PruningTechnique.LAMP
+            elif strategy == PruningStrategy.Global:
+                return PruningTechnique.GroupNorm
+            elif strategy == PruningStrategy.OnlyConv:
+                return PruningTechnique.GroupNorm
+            else:
+                raise Exception("Unknown strategy")
+        elif objective == CompressionObjective.Computations:
+            if strategy == PruningStrategy.OnlyLinear:
+                return PruningTechnique.LAMP
+            elif strategy == PruningStrategy.Global:
+                return PruningTechnique.GroupNorm
+            elif strategy == PruningStrategy.OnlyConv:
+                return PruningTechnique.GroupNorm
+            else:
+                raise Exception("Unknown strategy")
+        else:
+            raise Exception("Unknown objective")
+    elif architecture == ModelCategory.transformer:
+        return PruningTechnique.GroupNorm
+    else:  # shallow or unique architecture
+        if dataset.metric == 'accuracy':
+            return PruningTechnique.L1
+        else:  # Memory Footprint
+            return PruningTechnique.LAMP
+    
+
+
+def get_layers_to_ignore(model, strategy: PruningStrategy):
+    if strategy == PruningStrategy.OnlyLinear:
+        return get_conv_layers(model)
+    elif strategy == PruningStrategy.OnlyConv:
+        return get_linear_layers(model)
+    else:
+        return []
+
+
+
+""" Getting Specific Layers """
 
 def get_conv_layers(model):
-    modules = get_modules(model)
-    conv_layers = []
-    for module in modules:
-        if get_module_type(module) == "Conv2d":
-            conv_layers.append(module)
+    modules = flatten_layers(model)
+    conv_layers = [m for m in modules if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d))]
     return conv_layers
 
 
-# Method that ranks the filters of convolutional layers according to their L1-norm
-def rank_filters(model, data_loader, device):
-    # Get the convolutional layers of the model
-    conv_layers = get_conv_layers(model)
-
-    # For each convolutional layer
-    for layer in conv_layers:
-        # Get the layer's weight
-        weight = layer.weight.data
-
-        # Get the L1-norm of the layer's weight
-        l1_norm = torch.sum(weight.abs(), dim=(1, 2, 3))
-
-        # Get the number of filters
-        num_filters = weight.shape[0]
-
-        # Get the number of filters to prune
-        num_filters_to_prune = int(num_filters * PRUNE_PERCENTAGE)
-
-        # Get the indices of the filters to prune
-        _, filter_indices_to_prune = torch.topk(l1_norm, num_filters_to_prune)
-
-        # Set the filters to prune to zero
-        weight[filter_indices_to_prune, :, :, :] = 0
-
-    return model
+def get_linear_layers(model):
+    modules = flatten_layers(model)
+    linear_layers = [m for m in modules if isinstance(m, nn.Linear)]
+    return linear_layers
 
 
 def detect_model_category(model):
+    is_transformer = any(isinstance(layer, (nn.Transformer, nn.TransformerEncoder, nn.TransformerDecoder)) for layer in model.modules())
+    is_cnn = any(isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d)) for layer in model.modules())
 
-    # Method that analyzes the given model and returns suggested compression actions.
-    # TODO: Implement the analyze method
+    if is_transformer:
+        return ModelCategory.transformer
+    elif is_cnn:
+        return ModelCategory.cnn
+    else:
+        return None
 
 
 def analyze(
-    model_state,
-    model_architecture,
-    compression_goal,
+    model, 
+    dataset, 
+    objective: CompressionObjective,
     compression_target,
-    performance_metric,
-    perfomance_target,
+    performance_target,
+    settings,
+    compute_available = True,
+    device = None,
 ):
 
     compression_actions = []
 
-    if compression_goal == "Model Size":
-        # Pruning of fully connected layers
-        pass
-    elif compression_goal == "Inference Time":
+    # Calculate allowed performance drop
+    current_score = general.test(model, dataset, device=device)[1]
+    allowed_performance_drop = performance_target - current_score
+
+    if objective == "size":
+        # Focus of fully connected layers, as they contain most of the parameters
+
+        ### PRUNING ###
+        first_last_layer = get_first_last_layers(model)
+
+        layers_to_prune = get_layers_to_prune(model, compression_target, ignored_layers=first_last_layer)
+
+        strategy = get_pruning_strategy(layers_to_prune, objective, compression_target, performance_target)
+
+        technique = get_pruning_technique(model, dataset, objective, strategy, compression_target, performance_target)
+
+        compression_actions.append(
+        PruningAction( name="Magnitude Pruning", technique=technique, sparsity=compression_target, strategy=strategy, objective=objective, settings={
+                              "performance_target": performance_target,
+                              "compression_target": compression_target, 
+                              })
+        )
+
+        compression_actions.append(
+            DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss,  settings={
+                            "performance_target": performance_target,
+                            "compression_target": compression_target, 
+                            "patience": 1})
+        )
+
+
+
+    elif objective == "time":
         # Pruning of filters
-        pass
-    elif compression_goal == "Energy Usage":
+        compression_actions.append(
+        PruningAction( name="Convolution Pruning", technique=PruningTechnique.GroupNorm, sparsity=compression_target, strategy=PruningStrategy.OnlyConv, objective=objective, settings={
+                              "performance_target": performance_target,
+                              "compression_target": compression_target, 
+                              }))
+
+        compression_actions.append(
+            DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss,  settings={
+                            "performance_target": performance_target,
+                            "compression_target": compression_target, 
+                            "patience": 3})
+        )
+        
+
+    elif objective == "computations":
+        
+        compression_actions.append(
+        PruningAction( name="Convolutional Pruning", technique=PruningTechnique.GroupNorm, sparsity=compression_target,  strategy=PruningStrategy.OnlyConv, settings={
+                              "performance_target": performance_target,
+                              "compression_target": compression_target}))
         # Focus on making it fit on a CPU
         compression_actions.append(
-            CompressionAction(
-                type=CompressionType.quantization, name="INT-8 Dynamic Quantization"
-            )
+            QuantizationAction(name="INT-8 Dynamic Quantization", technique=QuantizationTechnique.Dynamic)
         )
     else:
-        # Throw exception, shouldn't happen
-        pass
+        raise Exception("Unknown compression type")
 
-    compression_actions.append(
-        CompressionAction(type=CompressionType.distillation, name="Logits Distillation", settings={
-                          "performance_target": perfomance_target,
-                          "compression_target": compression_target})
-    )
-    compression_actions.append(
-        CompressionAction(type=CompressionType.pruning,
-                          name="Magnitude Pruning", settings={
-                              "performance_target": perfomance_target,
-                              "compression_target": compression_target})
-    ),
-
+    
+    
     return compression_actions

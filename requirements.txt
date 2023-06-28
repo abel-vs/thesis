@@ -7,3 +7,6 @@ torch_pruning==1.0.0
 torchvision==0.14.1
 tqdm==4.64.1
 uvicorn==0.21.1
+tokenizers==0.13.3
+transformers==4.28.1
+datasets

@@ -1,0 +1,36 @@
+experiments:
+  - name: "VGG_CIFAR_Performance"
+    model_path: "/workspace/volume/models/vgg16_cifar10.pt"
+    dataset: "CIFAR-10"
+    type: "performance"
+    target: 90
+
+  - name: "ResNet_CIFAR_Performance"
+    model_path: "/workspace/volume/models/resnet_cifar10.pt"
+    dataset: "CIFAR-10"
+    type: "performance"
+    target: 90
+  
+  - name: "EfficientNet_CIFAR_Performance"
+    model_path: "/workspace/volume/models/efficientnet_cifar10.pt"
+    dataset: "CIFAR-10"
+    type: "performance"
+    target: 90
+
+  - name: "VGG_MNIST_Performance"
+    model_path: "/workspace/volume/models/mnist/vgg_mnist.pt"
+    dataset: "MNIST"
+    type: "performance"
+    target: 90
+
+  - name: "ResNet_MNIST_Performance"
+    model_path: "/workspace/volume/models/mnist/resnet_mnist.pt"
+    dataset: "MNIST"
+    type: "performance"
+    target: 90
+  
+  - name: "EfficientNet_MNIST_Performance"
+    model_path: "/workspace/volume/models/mnist/efficientnet_mnist.pt"
+    dataset: "MNIST"
+    type: "performance"
+    target: 90

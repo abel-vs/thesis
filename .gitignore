@@ -3,9 +3,13 @@ __pycache__/
 
 data/
 models/
+volume/
 
 src/.DS_Store
 
 .DS_Store
 
 examples/playground.ipynb
+
+results/
+experiments/

@@ -2,7 +2,6 @@ import importlib.util
 import ast
 import importlib
 from collections import OrderedDict
-import json
 from tempfile import NamedTemporaryFile, SpooledTemporaryFile
 from typing import List
 
@@ -119,6 +118,15 @@ def detect_pth_data_type(pth_file):
 
 # Method to import a model from a .pth file and a .py file
 def import_model(model_state_file, model_architecture_file, model_definition):
+
+    # Load the state dictionary from the .pth file
+    (state_type, state_object) = detect_pth_data_type(model_state_file)
+    print("State type:", state_type)
+    print("State object:", state_object)
+
+    if state_type == "model":
+        return state_object
+
     # Import the model architectures from the .py file
     spec = importlib.util.spec_from_file_location(
         "model_architecture", model_architecture_file.name)
@@ -136,12 +144,12 @@ def import_model(model_state_file, model_architecture_file, model_definition):
             f"Selected PyTorch '{model_definition.type}' '{model_definition.name}' not found in the architecture file")
 
     # Create an instance of the specified model class or call the specified method
-    if model_definition.type == "Module":
+    if model_definition.type.lower() == "module":
         if not issubclass(model_entity, torch.nn.Module) or model_entity == torch.nn.Module:
             raise ValueError(
                 f"Selected PyTorch '{model_definition.type}' '{model_definition.name}' is not a valid module in the architecture file")
         model = model_entity()
-    elif model_definition.type == "Method":
+    elif model_definition.type.lower() == "method":
         model = model_entity()
         if not isinstance(model, torch.nn.Module):
             raise ValueError(
@@ -149,9 +157,10 @@ def import_model(model_state_file, model_architecture_file, model_definition):
     else:
         raise ValueError(
             f"Unknown model_definition type: {model_definition.type}")
+    
+    print("Model type:", model)
 
-    # Load the state dictionary from the .pth file
-    (state_type, state_object) = detect_pth_data_type(model_state_file)
+    
     if state_type == "model":
         model = state_object
     elif state_type == "state_dict":

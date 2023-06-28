@@ -1,4 +1,5 @@
 import itertools
+from typing import List
 import torch
 import inspect
 from tqdm import tqdm
@@ -10,15 +11,13 @@ import copy
 import torch.optim as optim
 import plot
 import time
-
-from dataset_models import DataSet
+from src.interfaces.dataset_models import DataSet
 
 
 # General train function
-
-
-def train(model, dataset: DataSet, optimizer=None):
-    device = get_device()
+def train(model, dataset: DataSet, optimizer=None, device=None, writer=None):
+    if device is None:
+        device = get_device()
     model.to(device)
     train_loader = dataset.train_loader
     criterion = dataset.criterion
@@ -26,14 +25,14 @@ def train(model, dataset: DataSet, optimizer=None):
 
     if optimizer == None:
         # TODO: Build automated optimizer constructor
-        optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
 
     model.train()
     st = time.time()
     train_loss = 0
     train_score = 0
 
-    for (data, target) in tqdm(train_loader, desc="Train"):
+    for (data, target) in tqdm(train_loader, desc="Train", position=0, leave=True, dynamic_ncols=True):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -58,12 +57,17 @@ def train(model, dataset: DataSet, optimizer=None):
 
     return train_loss, train_score, duration, batch_duration, data_duration
 
-
 # General test function
-def test(model, dataset):
-    device = get_device()
+def test(model, dataset , validate=False, device=None):
+    if device is None:
+        device = get_device()
     model.to(device)
-    test_loader = dataset.test_loader
+
+    if validate:
+        test_loader = dataset.val_loader
+    else:
+        test_loader = dataset.test_loader
+
     if dataset.cap:
         test_loader = itertools.islice(test_loader, dataset.cap)
 
@@ -76,7 +80,7 @@ def test(model, dataset):
     st = time.time()
 
     with torch.no_grad():
-        for (data, target) in tqdm(test_loader, desc="Test"):
+        for (data, target) in tqdm(test_loader, desc=("Test" if not validate else "Validate"), position=0, leave=True, dynamic_ncols=True):
             data, target = data.to(device), target.to(device)
             output = model(data)
             loss = criterion(output, target)
@@ -99,6 +103,63 @@ def test(model, dataset):
 
     return test_loss, test_score, duration, batch_duration, data_duration
 
+
+# General validation method
+def validate(model, dataset, device=None):
+    return test(model, dataset, validate=True, device=device)
+
+# General finetune method
+def finetune(model, dataset, target=100, max_it=None, patience=3, save_path=None, device=None, optimizer=None, writer=None, writer_tag="finetune"):
+    epochs_without_improvement = 0
+    it = 0
+
+    start_metrics = validate(model, dataset, device=device)
+    if writer is not None:
+        plot.log_metrics_to_tensorboard(writer, writer_tag, start_metrics, start_metrics, it)
+
+    start_score = start_metrics[1]
+    start_model = copy.deepcopy(model) 
+    score, best_score = 0, 0
+
+    while score < target and epochs_without_improvement < patience:
+        
+        it += 1
+
+        train_metrics = train(model, dataset, optimizer=optimizer, device=device)
+        val_metrics = validate(model, dataset, device=device)
+
+        if writer is not None:
+            plot.log_metrics_to_tensorboard(writer, writer_tag, train_metrics, val_metrics, it)
+
+        score = val_metrics[1]
+
+        if score > best_score:
+            best_model = copy.deepcopy(model)
+            if save_path is not None:
+                torch.save(best_model, save_path)
+            best_score = score
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+
+        if max_it is not None and it >= max_it:
+            print("Maximum number of iterations reached")
+            break
+
+
+    if epochs_without_improvement >= patience:
+        print("Finetuning stopped due to early stopping with patience = {}".format(patience))
+    else:
+        print("Finetuning stopped due to reaching the target score, after {} iterations".format(it))
+
+
+    if best_score < start_score:
+        print("Finetuning did not improve the model")
+        return start_model
+    else:
+        print("Best score: {:.4f}".format(best_score))
+        return best_model
 
 # Method that imports the classes from a module to the globals dictionary of a process
 def import_module_classes(module, globals):
@@ -130,40 +191,12 @@ def get_device(no_cuda=False):
     return torch.device("cuda" if use_cuda else "cpu")
 
 
-def get_example_input(data_loader):
-    device = get_device()
-    input_batch = next(iter(data_loader))
+def get_example_input_batch(data_loader):
+    return next(iter(data_loader))
+
+
+def get_example_inputs(data_loader, device=None):
+    if device is None:
+        device = get_device()
+    input_batch = get_example_input_batch(data_loader)
     return input_batch[0].to(device)
-
-
-def save_model(model, path):
-    torch.save(model.state_dict(), path)
-
-
-def compress_model(model, dataset, compression_actions, settings):
-    """Main method for compressing a model via API"""
-
-    print("Settings: ", settings)
-    performance_target = settings.performance_target/100
-    compression_target = settings.compression_target/100
-
-    # Compress the model
-    compressed_model = copy.deepcopy(model)
-    print("Compression Actions:", compression_actions)
-    for action in compression_actions:
-        if action["type"] == "distillation":
-            plot.print_header("DISTILLATION STARTED")
-            compressed_model = distil.perform_distillation(
-                compressed_model, dataset, action["settings"])
-        if action["type"] == "quantization":
-            plot.print_header("QUANTIZATION STARTED")
-            compressed_model = quant.dynamic_quantization(compressed_model)
-        if action["type"] == "pruning":
-            plot.print_header("PRUNING STARTED")
-            action_settings = action["settings"]
-            compressed_model = prune.magnitude_pruning_structured(compressed_model, dataset, sparsity=action_settings.get(
-                "sparsity"), fineTune=action_settings.get("fineTune", False), strategy="NO_CONV")
-
-        print("Compressed Model", compressed_model)
-
-    return compressed_model
