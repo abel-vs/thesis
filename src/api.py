@@ -1,7 +1,6 @@
 # Bring in lightweight dependencies
 import sys
-sys.path.append("src")
-sys.path.append("../")
+sys.path.append('/home/abel/Development/thesis')
 import json
 from tempfile import NamedTemporaryFile
 from typing import List
@@ -27,7 +26,7 @@ PORT = 8000
 app = FastAPI()
 
 origins = ["http://" + HOST + ":" +
-           str(PORT), "http://localhost:3000", "http://localhost:3001", "http://localhost:3002"]
+           str(PORT), "*", "http://localhost:3000", "http://localhost:3001", "http://localhost:6969"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -144,7 +143,6 @@ def compress(
     plot.print_header("Compression Complete")
 
     # Evaluate the compressed model
-    original_results = eval.get_results(model, dataset)
     compressed_results = eval.get_results(compressed_model, dataset)
 
     # Save the compressed model into a temporary file
@@ -153,7 +151,6 @@ def compress(
     torch.save(model, compressed_model_file.name)
 
     return {
-        "original_results": original_results,
         "compressed_results": compressed_results,
         "compressed_architecture": str(compressed_model),
         "compressed_model": compressed_model_file,
@@ -181,7 +178,7 @@ def evaluate(
     print("Model:", model)
     print("Dataset:", dataset)
 
-    # Evaluate the compressed model
+    # Evaluate the model
     results = eval.get_results(model, dataset)
 
     print("Results:", results)

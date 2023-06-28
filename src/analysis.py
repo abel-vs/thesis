@@ -5,7 +5,7 @@ import torch.nn as nn
 from src.interfaces.compression_actions import CompressionAction, CompressionCategory, DistillationAction, PruningAction, QuantizationAction
 from src.interfaces.objectives import CompressionObjective
 from src.interfaces.strategies import PruningStrategy
-from src.interfaces.techniques import DistillationTechnique, PruningTechnique
+from src.interfaces.techniques import DistillationTechnique, PruningTechnique, QuantizationTechnique
 import src.general as general
 import src.evaluation as eval
 
@@ -247,8 +247,8 @@ def analyze(
     elif objective == "time":
         # Pruning of filters
         compression_actions.append(
-        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.1, strategy=PruningStrategy.OnlyConv, settings={
-                              "performance_target": compression_target,
+        PruningAction( name="Convolution Pruning", technique=PruningTechnique.GroupNorm, sparsity=compression_target, strategy=PruningStrategy.OnlyConv, objective=objective, settings={
+                              "performance_target": performance_target,
                               "compression_target": compression_target, 
                               }))
 
@@ -256,19 +256,19 @@ def analyze(
             DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss,  settings={
                             "performance_target": performance_target,
                             "compression_target": compression_target, 
-                            "patience": 1})
+                            "patience": 3})
         )
         
 
     elif objective == "computations":
         
         compression_actions.append(
-        PruningAction( name="Magnitude Pruning", technique=PruningTechnique.L1, sparsity=0.1,  strategy=PruningStrategy.OnlyConv, settings={
-                              "performance_target": compression_target,
+        PruningAction( name="Convolutional Pruning", technique=PruningTechnique.GroupNorm, sparsity=compression_target,  strategy=PruningStrategy.OnlyConv, settings={
+                              "performance_target": performance_target,
                               "compression_target": compression_target}))
         # Focus on making it fit on a CPU
         compression_actions.append(
-            QuantizationAction(name="INT-8 Dynamic Quantization")
+            QuantizationAction(name="INT-8 Dynamic Quantization", technique=QuantizationTechnique.Dynamic)
         )
     else:
         raise Exception("Unknown compression type")
