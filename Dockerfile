@@ -13,22 +13,21 @@ RUN apt-get update && \
 RUN pip3 install --upgrade pip
 
 # Set the working directory
-WORKDIR /workspace
+WORKDIR /app
 
 # Copy the requirements file into the container
 COPY requirements.txt .
 
 # Install any needed packages specified in requirements.txt
-RUN pip install --trusted-host pypi.python.org -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Jupyter Notebook
-RUN pip install jupyter
-
-# Expose the Jupyter Notebook port
-EXPOSE 8888
+# Expose port 8000
+EXPOSE 8000
 
 # Copy the rest of the project into the container
 COPY . .
 
-# # Set the default command to run the Jupyter Notebook server
-CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"]
+ENV PYTHONPATH=/app
+
+# Run api.py when the container launches
+CMD ["python3", "src/api.py"]

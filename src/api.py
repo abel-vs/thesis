@@ -20,7 +20,7 @@ from src.compress import compress_model
 from src.interfaces.compression_actions import create_compression_action
 from src.interfaces.dataset_models import get_supported_dataset
 
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"
 PORT = 8000
 
 app = FastAPI()
