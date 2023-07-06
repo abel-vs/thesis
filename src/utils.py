@@ -32,14 +32,23 @@ def spooled_to_named(spooled_file: SpooledTemporaryFile, suffix=None):
     return named_file
 
 
-def prepare_model_params(model_state, model_architecture):
+def bytes_to_named(bytes_object: bytes, suffix=None):
+    # Create a new NamedTemporaryFile object
+    named_file = NamedTemporaryFile(suffix=suffix, delete=False)
+
+    # Write the contents of the bytes object to the named file
+    named_file.write(bytes_object)
+    named_file.flush()
+
+    print(named_file.name)
+
+    # Don't forget to close named_file when done using!
+    return named_file
+
+def prepare_model_params(model_state: bytes, model_architecture: bytes):
     # Convert the model_state and model_architecture to NamedTemporaryFile objects
-    model_state_file: NamedTemporaryFile = spooled_to_named(
-        model_state.file, suffix=".pth"
-    )
-    model_architecture_file: NamedTemporaryFile = spooled_to_named(
-        model_architecture.file, suffix=".py"
-    )
+    model_state_file: NamedTemporaryFile = bytes_to_named(model_state, suffix=".pth")
+    model_architecture_file: NamedTemporaryFile = bytes_to_named(model_architecture, suffix=".py")
 
     return model_state_file, model_architecture_file
 

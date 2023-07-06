@@ -1,6 +1,8 @@
-# Bring in lightweight dependencies
+# Import additional required modules
+import redis
+import uuid
+import pickle
 import sys
-sys.path.append('/home/abel/Development/thesis')
 import json
 from tempfile import NamedTemporaryFile
 from typing import List
@@ -19,8 +21,9 @@ import utils
 from src.compress import compress_model
 from src.interfaces.compression_actions import create_compression_action
 from src.interfaces.dataset_models import get_supported_dataset
+from utils import import_model
 
-HOST = "0.0.0.0"
+HOST = "localhost"
 PORT = 8000
 
 app = FastAPI()
@@ -38,8 +41,6 @@ app.add_middleware(
 
 
 class APIModel(BaseModel):
-    """Base model for API endpoints"""
-
     @classmethod
     def __get_validators__(cls):
         yield cls.validate_to_json
@@ -52,22 +53,17 @@ class APIModel(BaseModel):
 
 
 class AnalysisSettings(APIModel):
-    # Dataset used for the analysis.
     dataset: str
-    # Goal of the compression (model_size, inference_time, energy_usage).
     compression_goal: str
-    # Target value that the model should achieve after compression, as percentage of the original value.
     compression_target: float
-    # Metric used to measure the performance of the model.
     performance_metric: str
-    # Target value that the model should achieve after compression.
     performance_target: float
 
 
 class CompressionAction(APIModel):
-    type: str          # Type of compression
-    name: str          # TName of specific technique
-    settings: dict     # Extra settings dependent on the compression action
+    type: str
+    name: str
+    settings: dict
 
 
 class CompressionSettings(APIModel):
@@ -82,25 +78,74 @@ class ModelDefinition(APIModel):
     name: str
     type: str
 
+r = redis.Redis(host='localhost', port=6379, db=0)
+
 
 @app.get("/")
 async def home():
-    return {"message": "Tool X API is running!"}
+    return {"message": "EasyCompress API is running!"}
 
 
-# Analze the given model and return suggested compression actions
-@app.post("/analyze")
-def analyze(
-    settings: AnalysisSettings = Form(...),
-    model_definition: ModelDefinition = Form(...),
+@app.post("/register")
+async def register_model_files(
     model_state: UploadFile = File(...),
     model_architecture: UploadFile = File(...),
+    model_definition: ModelDefinition = Form(...)
 ):
-    print("Settings:", settings)
+    # Read files content
+    state_contents = await model_state.read()
+    arch_contents = await model_architecture.read()
+    model_definition_dict = model_definition.dict()
 
-    # Load the model
-    model_files = utils.prepare_model_params(model_state, model_architecture)
-    model = utils.import_model(*model_files, model_definition)
+    # Generate a unique id for these files
+    model_id = uuid.uuid4().hex
+
+    # Store files and definition in a dictionary and pickle it
+    model_data = {
+        "state": state_contents,
+        "architecture": arch_contents,
+        "definition": model_definition_dict,
+    }
+    pickled_model_data = pickle.dumps(model_data)
+
+    # Cache the pickled data in Redis
+    r.set(f"model:{model_id}", pickled_model_data)
+    r.expire(f"model:{model_id}", 3600)  # 3600 seconds = 1 hour
+
+    # Return the id so the client can use it in future requests
+    return {"model_id": model_id}
+
+
+def load_model_by_id(model_id: str):
+    # Retrieve the pickled data from Redis
+    pickled_model_data = r.get(f"model:{model_id}")
+    
+    if pickled_model_data is None:
+        raise ValueError("Model not found")
+
+    # Unpickle the data
+    model_data = pickle.loads(pickled_model_data)
+
+    # Extract each piece of data
+    state_contents = model_data["state"]
+    arch_contents = model_data["architecture"]
+    model_definition = ModelDefinition(**model_data["definition"])
+
+    # Prepare the model parameters
+    model_files = utils.prepare_model_params(state_contents, arch_contents)
+    # Import the model
+    model = import_model(*model_files, model_definition)
+
+    return model
+
+
+@app.post("/analyze")
+async def analyze_model(
+    model_id: str = Form(...),  
+    settings: AnalysisSettings = Form(...),
+):
+    model = load_model_by_id(model_id)
+
     # Load the dataset
     dataset = get_supported_dataset(settings.dataset)
 
@@ -116,18 +161,12 @@ def analyze(
     return {"compression_actions": compression_actions, "settings": settings}
 
 
-# Analze the given model and return suggested compression actions
 @app.post("/compress")
-def compress(
-    settings: CompressionSettings = Form(...),
-    model_definition: ModelDefinition = Form(...),
-    model_state: UploadFile = File(...),
-    model_architecture: UploadFile = File(...),
+async def compress_model_endpoint(
+    settings: CompressionSettings,
+    model_id: str
 ):
-
-    # Load the model
-    model_files = utils.prepare_model_params(model_state, model_architecture)
-    model = utils.import_model(*model_files, model_definition)
+    model = load_model_by_id(model_id)
 
     dataset = get_supported_dataset(settings.dataset)
 
@@ -156,23 +195,13 @@ def compress(
         "compressed_model": compressed_model_file,
     }
 
-
-# Evaluate the performance of the model and return the results
 @app.post("/evaluate")
 def evaluate(
     dataset: str = Form(...),
-    model_definition: ModelDefinition = Form(...),
-    model_state: UploadFile = File(...),
-    model_architecture: UploadFile = File(...),
+    model_id: str = Form(...),
 ):
-    
-    print("Evaluating model...")
 
-    # Load the model
-    model_files = utils.prepare_model_params(model_state, model_architecture)
-    print("Check")
-    model = utils.import_model(*model_files, model_definition)
-
+    model = load_model_by_id(model_id)
     dataset = get_supported_dataset(dataset)
 
     print("Model:", model)
@@ -198,10 +227,6 @@ async def get_modules(
     return {"modules": modules, "methods": methods}
 
 
-def main(host, port):
-    uvicorn.run("api:app", host=host, port=port, reload=True)
 
-
-# Run the file to start the api server
 if __name__ == "__main__":
-    main(HOST, PORT)
+    uvicorn.run(app, host=HOST, port=PORT)
