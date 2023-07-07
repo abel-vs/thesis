@@ -210,8 +210,8 @@ def distillation_train_loop(
                 "loss": start_metrics[0],
                 "score": start_metrics[1],
             }
-            plot.log_metrics("distillation", "train", metrics, it, writer)
-            plot.log_metrics("distillation", "validation", metrics, it, writer)
+            plot.log_metrics(writer, "distillation", "train", metrics, it)
+            plot.log_metrics(writer, "distillation", "validation", metrics, it)
 
         while score < target and epochs_without_improvement < patience:
 
@@ -287,11 +287,10 @@ def create_student_model(teacher_model, dataset: DataSet, finetune=True):
 
 
 # Method that performs the whole distillation procedure
-def perform_distillation(model, dataset: DataSet, technique=DistillationTechnique.CombinedLoss, distil_criterion=F.kl_div, student_model=None,  settings: dict = {}, writer: SummaryWriter = None, device=None, save_path=None, **kwargs):
+def perform_distillation(model, dataset: DataSet, technique=DistillationTechnique.CombinedLoss, distil_criterion=F.kl_div, target=100, student_model=None,  settings: dict = {}, writer: SummaryWriter = None, device=None, save_path=None, **kwargs):
 
     # Extract settings
     # TODO: Find intelligent way to set the following properties
-    performance_target = settings.get("performance_target", None)
     optimizer = settings.get("optimizer", optim.SGD(
         student_model.parameters(), lr=0.01, momentum=0.5))
     patience = settings.get("patience", 3)
@@ -310,7 +309,7 @@ def perform_distillation(model, dataset: DataSet, technique=DistillationTechniqu
         distil_method,
         distil_criterion,
         optimizer,
-        target=performance_target,
+        target=target,
         patience=patience,
         writer=writer,
         device=device,

@@ -17,8 +17,10 @@ from datasets import load_dataset
 use_cuda = True
 kwargs = {'num_workers': 8, 'pin_memory': True} if use_cuda else {}
 
-DATA_DIR = "../../volume/data"
-CACHE_DIR = "../../volume/cache"
+# DATA_DIR = "../../volume/data"
+# CACHE_DIR = "../../volume/cache"
+DATA_DIR = "/workspace/volume/data"
+CACHE_DIR = "/workspace/volume/cache"
 
 """ General Dataset Class """
 
@@ -46,6 +48,38 @@ class DataSet:
         self.transforms = transforms
         self.train_loader.dataset.transform = transforms
         self.test_loader.dataset.transform = transforms
+
+
+class HuggingFaceDataset(DataSet):
+    def __init__(self, name: str, criterion, metric, train_batch_size, test_batch_size, transforms, dataset_name, tokenizer_name, cap=None):
+        self.dataset_name = dataset_name
+        self.tokenizer_name = tokenizer_name
+        self.dataset = None
+        self.tokenizer = None
+        self.init_dataset_and_tokenizer()
+
+        super().__init__(name, criterion, metric, train_batch_size, test_batch_size, self.hf_data_loaders, transforms, cap)
+
+    def init_dataset_and_tokenizer(self):
+        self.dataset = load_dataset(self.dataset_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
+
+    def hf_data_loaders(self, train_batch_size, test_batch_size, transforms):
+        train_loader = self.get_data_loader('train', train_batch_size, transforms)
+        val_loader = self.get_data_loader('validation', test_batch_size, transforms)
+        test_loader = self.get_data_loader('test', test_batch_size, transforms)
+        return train_loader, val_loader, test_loader
+
+    def get_data_loader(self, split_name, batch_size, transforms):
+        def encode(examples):
+            return self.tokenizer(examples['text'], truncation=True, padding='max_length', max_length=512)
+
+        dataset = self.dataset[split_name]
+        dataset = dataset.map(encode, batched=True)
+        dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'label'])
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        return loader
+
 
 
 """ Supported Datasets Classes """
@@ -219,3 +253,16 @@ def get_supported_dataset(name):
             data_loaders=get_imagenet_loaders,
             transforms=imagenet_transform,
         )
+    # elif name == 'SQUAD':
+    #     return DataSet(
+    #         name="SQUAD",
+    #         criterion=F.cross_entropy,  # or whatever loss function is appropriate for your task
+    #         metric=,  # or whatever metric is appropriate for your task
+    #         train_batch_size=16,
+    #         test_batch_size=64,
+    #         data_loaders=get_squad_data_loaders,
+    #         transforms=None,  # Not used for text data
+    #     )
+    else:
+        raise ValueError(f"Unsupported dataset: {name}")
+

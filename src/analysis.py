@@ -236,7 +236,7 @@ def analyze(
         )
 
         compression_actions.append(
-            DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss,  settings={
+            DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss, target=performance_target,  settings={
                             "performance_target": performance_target,
                             "compression_target": compression_target, 
                             "patience": 1})
@@ -253,7 +253,7 @@ def analyze(
                               }))
 
         compression_actions.append(
-            DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss,  settings={
+            DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss, target=performance_target, settings={
                             "performance_target": performance_target,
                             "compression_target": compression_target, 
                             "patience": 1})

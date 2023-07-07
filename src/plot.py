@@ -139,14 +139,14 @@ def log_metrics_to_tensorboard(writer, phase, train_metrics, val_metrics, step):
     train_loss, train_score, train_duration, train_batch_duration, train_data_duration = train_metrics
     val_loss, val_score, val_duration, val_batch_duration, val_data_duration = val_metrics
 
-    writer.add_scalars(f"Loss/{phase}", {"Train": train_loss, "Validation": val_loss}, step)
-    writer.add_scalars(f"Score/{phase}", {"Train": train_score, "Validation": val_score}, step)
-    writer.add_scalars(f"Batch duration/{phase}", {"Train": train_batch_duration, "Validation": val_batch_duration}, step)
-    writer.add_scalars(f"Data duration/{phase}", {"Train": train_data_duration, "Validation": val_data_duration}, step)
+    writer.add_scalars(f"loss/{phase}", {"train": train_loss, "validation": val_loss}, step)
+    writer.add_scalars(f"score/{phase}", {"train": train_score, "validation": val_score}, step)
+    writer.add_scalars(f"batch duration/{phase}", {"train": train_batch_duration, "validation": val_batch_duration}, step)
+    writer.add_scalars(f"data duration/{phase}", {"train": train_data_duration, "validation": val_data_duration}, step)
     writer.flush()
 
 # General metrics logging method
-def log_metrics(phase, label, metrics, step, writer):
+def log_metrics(writer, phase, label, metrics, step):
      for metric in metrics:
         writer.add_scalars(f"{metric}/{phase}", {label: metrics[metric]}, step)
         writer.flush()

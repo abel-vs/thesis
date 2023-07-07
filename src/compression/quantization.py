@@ -8,6 +8,7 @@ from torch.ao.quantization.quantize_fx import prepare_fx, convert_fx
 from torch.ao.quantization import QConfigMapping
 from tqdm import tqdm
 import general
+from torch.ao.quantization import default_dynamic_qconfig, float_qparams_weight_only_qconfig, QConfigMapping
 
 
 class QuantizedModelWrapper(nn.Module):
@@ -25,7 +26,7 @@ class QuantizedModelWrapper(nn.Module):
 
 
 
-def static_quantization(model, dataset, backend="x86", device=None):
+def static_quantization(model, dataset, backend="x86", device=None, calibration_cap=20):
     # Decouple the quantized model from the original model
     quantized_model = copy.deepcopy(model)
 
@@ -43,7 +44,7 @@ def static_quantization(model, dataset, backend="x86", device=None):
     quantized_model = prepare_fx(quantized_model, qconfig_mapping, example_inputs)
 
     # Calibrate with the training set
-    calibrate(quantized_model, dataset.train_loader, cap=20, device=device)
+    calibrate(quantized_model, dataset.train_loader, cap=calibration_cap, device=device)
 
     # Set the model to cpu
     quantized_model.cpu()
@@ -118,21 +119,53 @@ def is_quantized(model):
     return False
 
 # Method that performs dynamic quantization on a model
-def dynamic_quantization(model, backend="fbgemm", layers_to_quantize={torch.nn.Linear}, dtype=torch.qint8):
+def dynamic_quantization(model, dataset, backend="x86",  dtype=torch.qint8):
     # Decouple the quantized model from the original model
     model = copy.deepcopy(model)
+
+    example_inputs = general.get_example_inputs(dataset.train_loader)
+
+    # qconfig_mapping = (QConfigMapping()
+    #     .set_object_type(nn.Embedding, float_qparams_weight_only_qconfig)
+    #     .set_object_type(nn.LSTM, default_dynamic_qconfig)
+    #     .set_object_type(nn.Linear, default_dynamic_qconfig)
+    #     .set_object_type(nn.Conv2d, default_dynamic_qconfig)
+    # )
+    qconfig_mapping = {"": torch.quantization.default_dynamic_qconfig}  # An empty key denotes the default applied to all modules
+
 
     # Set the model to evaluation mode
     model.eval()
 
-    # Set the backend to use for quantization
-    torch.backends.quantized.engine = backend
 
-    # Quantize the model using dynamic quantization
-    quantized_model = torch.quantization.quantize_dynamic(
-        model,                 # Model to be quantized
-        layers_to_quantize,    # Set of layers to quantize
-        dtype=dtype            # Data type for quantized weights
-    )
+    prepared_model = prepare_fx(model, qconfig_mapping, example_inputs)
+    
+    # Set the model to cpu
+    prepared_model.cpu()
+
+    quantized_model = convert_fx(prepared_model)
+
+    # # Quantize the model using dynamic quantization
+    # quantized_model = torch.quantization.quantize_dynamic(
+    #     model,                 # Model to be quantized
+    #     layers_to_quantize,    # Set of layers to quantize
+    #     dtype=dtype            # Data type for quantized weights
+    # )
 
     return quantized_model
+
+
+def qat_prepare(model):
+    # Specify the quantization configuration
+    qconfig = torch.quantization.get_default_qat_qconfig('fbgemm')
+
+    # Prepare the model for QAT
+    model.qconfig = qconfig
+    torch.quantization.prepare_qat(model, inplace=True)
+
+    return model
+
+
+def qat_convert(model):
+    model = torch.quantization.convert(model, inplace=True)
+    return model

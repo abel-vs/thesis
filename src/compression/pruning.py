@@ -73,17 +73,29 @@ def get_pruner(model, example_inputs, type, ignored_layers, settings):
     if type == "random":
         imp = tp.importance.RandomImportance()
         pruner = tp.pruner.MagnitudePruner
+    elif type == "max":
+        imp = tp.importance.MagnitudeImportance(group_reduction="max")
+        pruner = tp.pruner.MagnitudePruner
+    elif type == "sum":
+        imp = tp.importance.MagnitudeImportance(group_reduction="sum")
+        pruner = tp.pruner.MagnitudePruner
+    elif type == "prod":
+        imp = tp.importance.MagnitudeImportance(group_reduction="prod")
+        pruner = tp.pruner.MagnitudePruner
+    elif type == "mean":
+        imp = tp.importance.MagnitudeImportance(group_reduction="mean")
+        pruner = tp.pruner.MagnitudePruner
     elif type == "l1":
-        imp = tp.importance.MagnitudeImportance(p=2)
+        imp = tp.importance.MagnitudeImportance(group_reduction="mean")
         pruner = tp.pruner.MagnitudePruner
     elif type == "lamp":
-        imp = tp.importance.LAMPImportance(p=2)
+        imp = tp.importance.LAMPImportance()
         pruner = tp.pruner.MagnitudePruner
     elif type == "slim":
         imp = tp.importance.BNScaleImportance()
         pruner = tp.pruner.MagnitudePruner
     elif type == "group_norm":
-        imp = tp.importance.GroupNormImportance(p=2)
+        imp = tp.importance.GroupNormImportance(p=1)
         pruner = tp.pruner.GroupNormPruner
     elif type == "group_lamp":
         imp = tp.importance.LAMPImportance(p=2)
@@ -95,9 +107,11 @@ def get_pruner(model, example_inputs, type, ignored_layers, settings):
                   example_inputs,
                   importance=imp,
                   iterative_steps=settings["iterative_steps"],
-                  ch_sparsity=settings["sparsity"],
+                  ch_sparsity=1.0,
                   ignored_layers=ignored_layers,
-                  global_pruning=True
+                  global_pruning=True,
+                  unwrapped_parameters = [],
+                ch_sparsity_dict = {}
                   )
 
 
@@ -111,7 +125,7 @@ def structure_pruning(
         objective: CompressionObjective,
         finetune=False,
         finetune_epochs=1,
-        iterative_steps=100,
+        iterative_steps=50,
         optimizer=None,
         inplace=True,
         writer=None,
@@ -168,8 +182,11 @@ def structure_pruning(
         pruner.step()  # Removes the least important channels from the model
 
         if writer is not None:
+            params = eval.get_params(model)
+            pruned_params = original_params - params
+            pruned_percentage = (pruned_params / original_params) * 100
             score = general.validate(model, dataset, device=device)[1]
-            writer.add_scalars(f"score/pruning", {"Score": score}, i+1)
+            writer.add_scalars(f"score/pruning-degradation", {"Score": score}, pruned_percentage)
 
         if finetune:
             plot.print_header(f"Pruning step {i+1}/{iterative_steps}")

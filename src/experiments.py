@@ -23,6 +23,29 @@ import argparse
 
 LOG_DIR = "/workspace/volume/experiments/"
 
+def get_reductions(original_results, compressed_results):    
+    comparison_dict = {}
+
+    for key in original_results:
+        original_value = original_results[key]
+        compressed_value = compressed_results[key]
+
+        if isinstance(original_value, (int, float)):
+            absolute_reduction = original_value - compressed_value
+            percentage_reduction = (absolute_reduction / original_value) * 100
+            try:
+                xfold_reduction = original_value / compressed_value
+            except ZeroDivisionError:
+                xfold_reduction = float('inf')
+
+            comparison_dict[key] = {
+                "absolute_reduction": absolute_reduction,
+                "percentage_reduction": percentage_reduction,
+                "xfold_reduction": xfold_reduction,
+            }
+
+    return comparison_dict
+
 
 class ExperimentManager:
     """
@@ -32,7 +55,7 @@ class ExperimentManager:
 
     def __init__(self, experiment_config, device=None, transforms=None):
         self.config = experiment_config
-        if self.config["foldername"] is not None:
+        if "foldername" in self.config and self.config["foldername"] is not None:
             self.foldername = self.config["foldername"] + "/" + self.config["name"] 
         else:
             self.foldername = self.config["dataset"] + "/" + self.config["model"].lower() + "/" + self.config["objective"] + "/" + str(self.config["compression_target"])
@@ -143,6 +166,13 @@ class ExperimentManager:
         with open(os.path.join(LOG_DIR, self.foldername, filename), 'w') as f:
             json.dump(serialized_config, f, indent=4)
 
+    # Method to save reductions
+    def save_reductions(self, original_results, compressed_results):
+        filename = self.get_experiment_name() + "_reductions.json"
+        reductions = get_reductions(original_results, compressed_results)
+        with open(os.path.join(LOG_DIR, self.foldername, filename), 'w') as f:
+            json.dump(reductions, f, indent=4)
+
     # Method to run experiment, this is the main method
     def run_experiment(self):
         self.setup_logging()
@@ -182,6 +212,9 @@ class ExperimentManager:
         logging.info('Saving evaluation results...')
         self.save_results(compressed_results, "_compressed_results")
 
+        logging.info('Saving reductions...')
+        self.save_reductions(original_results, compressed_results)
+
         logging.info('Experiment completed successfully')
 
         self.writer.close()
@@ -215,7 +248,7 @@ def process_configs(experiment_config, compression_actions_config):
                         **action_dict, 
                         "objective": experiment.get("objective"), 
                         "performance_target": experiment.get("performance_target"), 
-                        "compression_target": experiment.get("compression_target")
+                        "compression_target": experiment.get("compression_target"),
                     })
                     for action_dict in actions
                 ]
@@ -235,6 +268,9 @@ def serialize_config(config):
     if actions is not None:
         config["compression_actions"] = [str(action) for action in actions]
     return config
+
+
+
 
 
 def main():

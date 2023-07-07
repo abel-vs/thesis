@@ -15,7 +15,7 @@ from src.interfaces.dataset_models import DataSet
 
 
 # General train function
-def train(model, dataset: DataSet, optimizer=None, device=None, writer=None):
+def train(model, dataset: DataSet, optimizer=None, device=None, writer=None, pruner=None):
     if device is None:
         device = get_device()
     model.to(device)
@@ -39,7 +39,14 @@ def train(model, dataset: DataSet, optimizer=None, device=None, writer=None):
         loss = criterion(output, target)
         train_loss += loss.item()
         loss.backward()
+        if pruner is not None:
+            pruner.regularize(model)
         optimizer.step()
+
+
+        if writer is not None:
+            pass
+            # plot.log_metrics(writer, "train", train_metrics, val_metrics, it)
 
         if metric is not None:
             score = metric(output, target)

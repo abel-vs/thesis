@@ -16,3 +16,4 @@ class DistillationTechnique(str, Enum):
 class QuantizationTechnique(str, Enum):
     Dynamic = "dynamic"
     Static = "static"
+    QAT = "qat"

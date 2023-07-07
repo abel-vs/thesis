@@ -3,6 +3,7 @@ import copy
 import logging
 import torch
 import torch.nn as nn
+import src.general as general
 import src.compression.quantization as quant
 import src.compression.distillation as distil
 import src.compression.pruning as prune
@@ -12,7 +13,7 @@ import src.evaluation as eval
 import src.analysis as analysis
 
 from typing import List
-from src.interfaces.compression_actions import CompressionAction, DistillationAction, PruningAction, QuantizationAction, order_compression_actions
+from src.interfaces.compression_actions import CompressionAction, DistillationAction, FineTuneAction, PruningAction, QuantizationAction, order_compression_actions
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -52,7 +53,7 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
         
         if isinstance(action, DistillationAction):
             plot.print_header("DISTILLATION STARTED")
-            compressed_model = distil.perform_distillation(model, dataset, technique=action.technique, distil_criterion=action.distillation_loss , student_model=compressed_model,  settings = action.settings, save_path=save_path, writer=writer, device=device)
+            compressed_model = distil.perform_distillation(model, dataset, technique=action.technique, distil_criterion=action.distillation_loss , target=action.target, student_model=compressed_model,  settings = action.settings, save_path=save_path, writer=writer, device=device)
 
         if isinstance(action, QuantizationAction):
             plot.print_header("QUANTIZATION STARTED")
@@ -65,6 +66,11 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
                 compressed_model = quant.dynamic_quantization(compressed_model)
             else:
                 raise ValueError("Invalid quantization technique")
+        
+        if isinstance(action, FineTuneAction):
+            plot.print_header("FINETUNING STARTED")
+            compressed_model = general.finetune(compressed_model, dataset, target=action.target, patience=action.patience, writer=writer, device=device)
+
     
     if writer is not None:
         writer.close()
