@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.quantization import QuantStub, DeQuantStub, FakeQuantize
 from tqdm import tqdm
 import general
-
+from src.interfaces.techniques import QuantizationTechnique
 
 class QuantizedModelWrapper(nn.Module):
     def __init__(self, model):
@@ -110,8 +110,8 @@ def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
 
 
 def is_quantized(model):
-    for module in model.modules():
-        if isinstance(module, QuantStub) or isinstance(module, DeQuantStub) or isinstance(module, FakeQuantize):
+    for module in model.children():
+        if 'quant' in str(type(module).__module__.lower()):
             return True
     return False
 
@@ -132,5 +132,35 @@ def dynamic_quantization(model, backend="fbgemm", layers_to_quantize={torch.nn.L
         layers_to_quantize,    # Set of layers to quantize
         dtype=dtype            # Data type for quantized weights
     )
+
+    return quantized_model
+
+def qat(model, dataset):
+    # Specify quantization configuration
+    qconfig = torch.quantization.get_default_qat_qconfig('fbgemm')
+
+    # Apply the configuration to the model
+    model.qconfig = qconfig
+
+    # Convert batch norm layers to a version that works better with quantization
+    torch.quantization.prepare_qat(model, inplace=True)
+
+    general.finetune(model, dataset, patience=3)
+
+    # Finally, convert the model to a quantized version
+    model.eval()
+    model = torch.quantization.convert(model, inplace=True)
+
+def perform_quantization(model, dataset, technique, device=None):
+    if device is None:
+        device = general.get_device()
+    if technique == QuantizationTechnique.Static:
+        quantized_model = static_quantization(model, dataset, device=device)
+    elif technique == QuantizationTechnique.Dynamic:
+        quantized_model = dynamic_quantization(model)
+    elif technique == QuantizationTechnique.QAT: 
+        quantized_model = qat(model, dataset)
+    else:
+        raise Exception("Unknown Quantization Technique")
 
     return quantized_model

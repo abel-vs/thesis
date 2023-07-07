@@ -2,6 +2,7 @@
 import copy
 import logging
 import torch.nn as nn
+from src import general
 import src.compression.quantization as quant
 import src.compression.distillation as distil
 import src.compression.pruning as prune
@@ -21,6 +22,12 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
     compressed_model = copy.deepcopy(model)
     model.eval() # Original model shouldn't be changed
 
+
+    if device is None:
+        device = general.get_device()
+    compressed_model.to(device)
+    model.to(device)
+
     print("Compression Actions:", compression_actions)
 
     compression_actions = order_compression_actions(compression_actions)
@@ -39,18 +46,15 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
                 
             compressed_model = prune.structure_pruning(compressed_model, dataset, sparsity, action.technique,  action.strategy, action.objective, writer=writer, device=device, **action.settings)
 
+            print(compressed_model)
+
             new_params = eval.get_params(compressed_model)
             new_size = eval.get_size(compressed_model)
             
             print("Pruning Results:")
-            print("Old Params: %d, New Params: %d, Reduction: %.2f", old_params, new_params, 1 - (new_params / old_params))
-            print("Old Size: %.2f, New Size: %.2f, Reduction: %.2f", old_size, new_size, 1 - (new_size / old_size))
+            print("Old Params: %d, New Params: %d, Reduction: %.2f".format(old_params, new_params, 1 - (new_params / old_params)))
+            print("Old Size: %.2f, New Size: %.2f, Reduction: %.2f".format(old_size, new_size, 1 - (new_size / old_size)))
 
-
-            logging.info("Pruning Results:")
-            logging.info("Old Params: %d, New Params: %d, Reduction: %.2f", old_params, new_params, 1 - (new_params / old_params))
-            logging.info("Old Size: %.2f, New Size: %.2f, Reduction: %.2f", old_size, new_size, 1 - (new_size / old_size))
-        
         if type(action) == DistillationAction:
             plot.print_header("DISTILLATION STARTED")
             compressed_model = distil.perform_distillation(model, dataset, technique=action.technique, student_model=compressed_model,  settings = action.settings, save_path=save_path, writer=writer, device=device)
@@ -58,7 +62,7 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
             
         if type(action) ==  QuantizationAction:
             plot.print_header("QUANTIZATION STARTED")
-            compressed_model = quant.dynamic_quantization(compressed_model)
+            compressed_model = quant.peform_quantization(compressed_model, dataset, action.technique)
 
     if writer is not None:
         writer.close()

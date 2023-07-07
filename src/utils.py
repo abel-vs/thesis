@@ -130,8 +130,6 @@ def import_model(model_state_file, model_architecture_file, model_definition):
 
     # Load the state dictionary from the .pth file
     (state_type, state_object) = detect_pth_data_type(model_state_file)
-    print("State type:", state_type)
-    print("State object:", state_object)
 
     if state_type == "model":
         return state_object

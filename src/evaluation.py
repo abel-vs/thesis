@@ -1,11 +1,13 @@
 import copy
 import os
 import torch
-import general
+import src.general as general
 import torch.nn.functional as F
-from op_counter import count_ops_and_params
+from src.op_counter import count_ops_and_params
 from src.interfaces.dataset_models import DataSet
 import time
+from torch.quantization import QuantStub, DeQuantStub, FakeQuantize
+
 
 # Method that returns the model size in MB
 def get_size(model):
@@ -68,7 +70,6 @@ def get_inference_time(model, dataset: DataSet, device=None, quantized=False, ca
     batch_duration = ((end_time - start_time) / cap ) * 1000
     data_duration = batch_duration / data.shape[0]
     return batch_duration, data_duration
-
     
 
 # Method that tests the model and returns the metrics

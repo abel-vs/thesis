@@ -28,7 +28,7 @@ technique_names = {
     DistillationTechnique.SoftTarget: "Soft Target Distillation",
     DistillationTechnique.HardTarget: "Hard Target Distillation",
     DistillationTechnique.CombinedLoss: "Combined Loss Distillation",
-    QuantizationTechnique.Dynamic: "Dynamic Training",
-    QuantizationTechnique.Static: "Static Training",
+    QuantizationTechnique.Dynamic: "Dynamic Quantization",
+    QuantizationTechnique.Static: "Static Quantization",
     QuantizationTechnique.QAT: "Quantization Aware Training"
 }

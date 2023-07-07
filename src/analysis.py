@@ -219,10 +219,10 @@ def get_quantization_technique(backend, compute_available, performance_drop):
         if compute_available: 
             return QuantizationTechnique.QAT
         else:
-            if performance_drop>2:
+            if performance_drop<=2:
                 return QuantizationTechnique.Static
             else: 
-                return QuantizationTechnique.Dynamic
+                return QuantizationTechnique.Static
         
     else:
         return None
@@ -234,8 +234,8 @@ def analyze(
     compression_target,
     performance_target,
     settings,
-    compute_available = True,
-    backend = "CUDA",
+    compute_available = False,
+    backend = "CPU",
     device = None,
 ):
 
