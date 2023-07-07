@@ -1,25 +1,23 @@
 # Bring in lightweight dependencies
-import sys
-sys.path.append("src")
-sys.path.append("../")
-import json
-from tempfile import NamedTemporaryFile
-from typing import List
-
-import torch
-import torch.nn.functional as F
-import uvicorn
-from fastapi import Depends, FastAPI, File, Form, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-
-import analysis
-import evaluation as eval
-import plot
-import utils
-from src.compress import compress_model
-from src.interfaces.compression_actions import create_compression_action
 from src.interfaces.dataset_models import get_supported_dataset
+from src.interfaces.compression_actions import create_compression_action
+from src.compress import compress_model
+import utils
+import plot
+import evaluation as eval
+import analysis
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, File, Form, UploadFile
+import uvicorn
+import torch.nn.functional as F
+import torch
+from typing import List
+from tempfile import NamedTemporaryFile
+import json
+import sys
+sys.path.append('/home/abel/Development/thesis')
+
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -27,7 +25,7 @@ PORT = 8000
 app = FastAPI()
 
 origins = ["http://" + HOST + ":" +
-           str(PORT), "*", "http://localhost:3000", "http://localhost:3001", "http://localhost:6969", "http://131.180.79.143:6969"]
+           str(PORT), "*", "http://localhost:3000", "http://localhost:3001", "http://localhost:6969"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -132,9 +130,8 @@ def compress(
 
     dataset = get_supported_dataset(settings.dataset)
 
-
-    compression_actions = list(map(lambda action: create_compression_action(action, settings.compression_type), settings.actions))
-
+    compression_actions = list(map(lambda action: create_compression_action(
+        action, settings.compression_type), settings.actions))
 
     plot.print_header("Compression Started")
 
@@ -144,7 +141,6 @@ def compress(
     plot.print_header("Compression Complete")
 
     # Evaluate the compressed model
-    original_results = eval.get_results(model, dataset)
     compressed_results = eval.get_results(compressed_model, dataset)
 
     # Save the compressed model into a temporary file
@@ -153,7 +149,6 @@ def compress(
     torch.save(model, compressed_model_file.name)
 
     return {
-        "original_results": original_results,
         "compressed_results": compressed_results,
         "compressed_architecture": str(compressed_model),
         "compressed_model": compressed_model_file,
@@ -168,7 +163,7 @@ def evaluate(
     model_state: UploadFile = File(...),
     model_architecture: UploadFile = File(...),
 ):
-    
+
     print("Evaluating model...")
 
     # Load the model
@@ -181,7 +176,7 @@ def evaluate(
     print("Model:", model)
     print("Dataset:", dataset)
 
-    # Evaluate the compressed model
+    # Evaluate the model
     results = eval.get_results(model, dataset)
 
     print("Results:", results)

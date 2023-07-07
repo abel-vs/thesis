@@ -172,8 +172,9 @@ def structure_pruning(
         original_flops = eval.get_flops(model, example_inputs)
         target = int(original_flops * (1 - sparsity))
     elif objective == "time":
-        original_time = eval.get_inference_time(model, dataset)
+        original_time = eval.get_inference_time(model, dataset, cap=10)[0]
         target = original_time * (1 - sparsity)
+        print("Target Time: ", target)
     else:
         raise NotImplementedError
 
@@ -206,7 +207,8 @@ def structure_pruning(
             if flops < target:
                 break
         elif objective == "time":
-            time = eval.get_inference_time(model, dataset)
+            time = eval.get_inference_time(model, dataset, cap=10)[0]
+            print(time)
             if time < target:
                 break
 
