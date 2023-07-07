@@ -8,8 +8,8 @@ from torch.ao.quantization.quantize_fx import prepare_fx, convert_fx
 from torch.ao.quantization import QConfigMapping
 from tqdm import tqdm
 import general
+from src.interfaces.techniques import QuantizationTechnique
 from torch.ao.quantization import default_dynamic_qconfig, float_qparams_weight_only_qconfig, QConfigMapping
-
 
 class QuantizedModelWrapper(nn.Module):
     def __init__(self, model):
@@ -111,10 +111,8 @@ def get_modules_to_fuse(model, modules_to_fuse=None, prefix=""):
 
 
 def is_quantized(model):
-    if isinstance(model, QuantizedModelWrapper):
-        return True
-    for module in model.modules():
-        if isinstance(module, QuantStub) or isinstance(module, DeQuantStub) or isinstance(module, FakeQuantize):
+    for module in model.children():
+        if 'quant' in str(type(module).__module__.lower()):
             return True
     return False
 
@@ -154,18 +152,32 @@ def dynamic_quantization(model, dataset, backend="x86",  dtype=torch.qint8):
 
     return quantized_model
 
-
-def qat_prepare(model):
-    # Specify the quantization configuration
+def qat(model, dataset):
+    # Specify quantization configuration
     qconfig = torch.quantization.get_default_qat_qconfig('fbgemm')
 
-    # Prepare the model for QAT
+    # Apply the configuration to the model
     model.qconfig = qconfig
+
+    # Convert batch norm layers to a version that works better with quantization
     torch.quantization.prepare_qat(model, inplace=True)
 
-    return model
+    general.finetune(model, dataset, patience=3)
 
-
-def qat_convert(model):
+    # Finally, convert the model to a quantized version
+    model.eval()
     model = torch.quantization.convert(model, inplace=True)
-    return model
+
+def perform_quantization(model, dataset, technique, device=None):
+    if device is None:
+        device = general.get_device()
+    if technique == QuantizationTechnique.Static:
+        quantized_model = static_quantization(model, dataset, device=device)
+    elif technique == QuantizationTechnique.Dynamic:
+        quantized_model = dynamic_quantization(model)
+    elif technique == QuantizationTechnique.QAT: 
+        quantized_model = qat(model, dataset)
+    else:
+        raise Exception("Unknown Quantization Technique")
+
+    return quantized_model

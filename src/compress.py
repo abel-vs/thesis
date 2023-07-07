@@ -23,6 +23,12 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
     compressed_model = copy.deepcopy(model)
     model.eval() # Original model shouldn't be changed
 
+
+    if device is None:
+        device = general.get_device()
+    compressed_model.to(device)
+    model.to(device)
+
     print("Compression Actions:", compression_actions)
 
     compression_actions = order_compression_actions(compression_actions)
@@ -44,32 +50,25 @@ def compress_model(model, dataset, compression_actions: List[CompressionAction],
                 
             compressed_model = prune.structure_pruning(compressed_model, dataset, sparsity, action.technique,  action.strategy, action.objective, writer=writer, device=device, **action.settings)
 
+            print(compressed_model)
+
             new_params = eval.get_params(compressed_model)
             new_size = eval.get_size(compressed_model)
+            
+            print("Pruning Results:")
+            print("Old Params: %d, New Params: %d, Reduction: %.2f".format(old_params, new_params, 1 - (new_params / old_params)))
+            print("Old Size: %.2f, New Size: %.2f, Reduction: %.2f".format(old_size, new_size, 1 - (new_size / old_size)))
 
-            logging.info("Pruning Results:")
-            logging.info("Old Params: %d, New Params: %d, Reduction: %.2f", old_params, new_params, 1 - (new_params / old_params))
-            logging.info("Old Size: %.2f, New Size: %.2f, Reduction: %.2f", old_size, new_size, 1 - (new_size / old_size))
-        
-        if isinstance(action, DistillationAction):
+        if type(action) == DistillationAction:
             plot.print_header("DISTILLATION STARTED")
             compressed_model = distil.perform_distillation(model, dataset, technique=action.technique, distil_criterion=action.distillation_loss , target=action.target, student_model=compressed_model,  settings = action.settings, save_path=save_path, writer=writer, device=device)
 
         if isinstance(action, QuantizationAction):
             plot.print_header("QUANTIZATION STARTED")
             
-            if action.technique == "static":
-                backend= action.settings.get("backend", "fbgemm")
-                fuse = action.settings.get("fuse", False)
-                compressed_model = quant.static_quantization(compressed_model, dataset, backend=backend, fuse=fuse, device=device)
-            elif action.technique == "dynamic": 
-                compressed_model = quant.dynamic_quantization(compressed_model)
-            else:
-                raise ValueError("Invalid quantization technique")
-        
-        if isinstance(action, FineTuneAction):
-            plot.print_header("FINETUNING STARTED")
-            compressed_model = general.finetune(compressed_model, dataset, target=action.target, patience=action.patience, writer=writer, device=device)
+        if type(action) ==  QuantizationAction:
+            plot.print_header("QUANTIZATION STARTED")
+            compressed_model = quant.peform_quantization(compressed_model, dataset, action.technique)
 
     
     if writer is not None:

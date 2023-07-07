@@ -1,11 +1,12 @@
 from enum import Enum
 import torch
 import torch.nn as nn
+from src import metrics
 
 from src.interfaces.compression_actions import CompressionAction, CompressionCategory, DistillationAction, PruningAction, QuantizationAction
 from src.interfaces.objectives import CompressionObjective
-from src.interfaces.strategies import PruningStrategy
-from src.interfaces.techniques import DistillationTechnique, PruningTechnique, QuantizationTechnique
+from src.interfaces.strategies import PruningStrategy, strategy_names
+from src.interfaces.techniques import DistillationTechnique, PruningTechnique, QuantizationTechnique, technique_names
 import src.general as general
 import src.evaluation as eval
 
@@ -154,13 +155,16 @@ def get_pruning_technique(model, dataset, objective: CompressionObjective, strat
         else:
             raise Exception("Unknown objective")
     elif architecture == ModelCategory.transformer:
-        return PruningTechnique.GroupNorm
+        if objective == CompressionObjective.Size:
+            return PruningTechnique.GroupNorm
+        elif objective == CompressionObjective.Computations:
+            return PruningTechnique.GroupNorm
+        elif objective == CompressionObjective.Time:
+            return PruningTechnique.GroupNorm
+        else: 
+            raise Exception("Unknown objective")
     else:  # shallow or unique architecture
-        if dataset.metric == 'accuracy':
-            return PruningTechnique.L1
-        else:  # Memory Footprint
-            return PruningTechnique.LAMP
-    
+        return PruningTechnique.Random
 
 
 def get_layers_to_ignore(model, strategy: PruningStrategy):
@@ -197,7 +201,31 @@ def detect_model_category(model):
         return ModelCategory.cnn
     else:
         return None
+    
+def get_distillation_technique(compute_available, metric):
+    print(metric)
+    if not compute_available:
+        return DistillationTechnique.HardTarget
+    else:
+        if metric in [metrics.accuracy]:
+            return DistillationTechnique.HardTarget
+        elif metric in ["f1", "perplexity", ""]: 
+            return DistillationTechnique.SoftTarget
+        else:
+            return DistillationTechnique.CombinedLoss
 
+def get_quantization_technique(backend, compute_available, performance_drop):
+    if backend == "CPU":
+        if compute_available: 
+            return QuantizationTechnique.QAT
+        else:
+            if performance_drop<=2:
+                return QuantizationTechnique.Static
+            else: 
+                return QuantizationTechnique.Static
+        
+    else:
+        return None
 
 def analyze(
     model, 
@@ -206,73 +234,52 @@ def analyze(
     compression_target,
     performance_target,
     settings,
-    compute_available = True,
+    compute_available = False,
+    backend = "CPU",
     device = None,
 ):
 
     compression_actions = []
 
-    # Calculate allowed performance drop
+    # Calculate heuristics
     current_score = general.test(model, dataset, device=device)[1]
-    allowed_performance_drop = performance_target - current_score
+    performance_drop = performance_target - current_score
 
-    if objective == "size":
-        # Focus of fully connected layers, as they contain most of the parameters
+    first_last_layer = get_first_last_layers(model)
 
-        ### PRUNING ###
-        first_last_layer = get_first_last_layers(model)
+    layers_to_prune = get_layers_to_prune(model, compression_target, ignored_layers=first_last_layer)
 
-        layers_to_prune = get_layers_to_prune(model, compression_target, ignored_layers=first_last_layer)
+    pruning_strategy = get_pruning_strategy(layers_to_prune, objective, compression_target, performance_target)
 
-        strategy = get_pruning_strategy(layers_to_prune, objective, compression_target, performance_target)
+    pruning_technique = get_pruning_technique(model, dataset, objective, pruning_strategy, compression_target, performance_target)
 
-        technique = get_pruning_technique(model, dataset, objective, strategy, compression_target, performance_target)
+    distillation_technique = get_distillation_technique(compute_available, dataset.metric)
 
-        compression_actions.append(
-        PruningAction( name="Magnitude Pruning", technique=technique, sparsity=compression_target, strategy=strategy, objective=objective, settings={
-                              "performance_target": performance_target,
-                              "compression_target": compression_target, 
-                              })
-        )
+    quantization_technique = get_quantization_technique(backend, compute_available, performance_drop)
 
-        compression_actions.append(
-            DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss, target=performance_target,  settings={
+
+    compression_actions.append(
+    PruningAction( name=(strategy_names[pruning_strategy] + " " + technique_names[pruning_technique]), 
+                    technique=pruning_technique, sparsity=compression_target, 
+                    strategy=pruning_strategy, objective=objective, settings={
                             "performance_target": performance_target,
                             "compression_target": compression_target, 
-                            "patience": 1})
+                            })
+    )
+
+    compression_actions.append(
+        DistillationAction(name=technique_names[distillation_technique], technique=distillation_technique,  settings={
+                        "performance_target": performance_target,
+                        "compression_target": compression_target, 
+                        "patience": 1})
+    )
+
+    if quantization_technique is not None:
+        compression_actions.append(
+            QuantizationAction(name=technique_names[quantization_technique], technique=quantization_technique)
         )
 
+    print(compression_actions)
 
-
-    elif objective == "time":
-        # Pruning of filters
-        compression_actions.append(
-        PruningAction( name="Convolution Pruning", technique=PruningTechnique.GroupNorm, sparsity=compression_target, strategy=PruningStrategy.OnlyConv, objective=objective, settings={
-                              "performance_target": performance_target,
-                              "compression_target": compression_target, 
-                              }))
-
-        compression_actions.append(
-            DistillationAction(name="Combined Distillation", technique=DistillationTechnique.CombinedLoss, target=performance_target, settings={
-                            "performance_target": performance_target,
-                            "compression_target": compression_target, 
-                            "patience": 3})
-        )
-        
-
-    elif objective == "computations":
-        
-        compression_actions.append(
-        PruningAction( name="Convolutional Pruning", technique=PruningTechnique.GroupNorm, sparsity=compression_target,  strategy=PruningStrategy.OnlyConv, settings={
-                              "performance_target": performance_target,
-                              "compression_target": compression_target}))
-        # Focus on making it fit on a CPU
-        compression_actions.append(
-            QuantizationAction(name="INT-8 Dynamic Quantization", technique=QuantizationTechnique.Dynamic)
-        )
-    else:
-        raise Exception("Unknown compression type")
-
-    
-    
     return compression_actions
+2

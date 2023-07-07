@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
-import metrics
+import src.metrics as metrics
 import torchvision as tv
 from torchvision import transforms
 from transformers import glue_convert_examples_to_features, glue_output_modes, glue_processors, AutoTokenizer

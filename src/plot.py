@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import metrics
+import src.metrics as metrics
 
 HEADER_LENGTH = 80
 

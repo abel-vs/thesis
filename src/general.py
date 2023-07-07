@@ -3,13 +3,9 @@ from typing import List
 import torch
 import inspect
 from tqdm import tqdm
-import compression.distillation as distil
-import compression.quantization as quant
-import compression.pruning as prune
-import evaluation as eval
 import copy
 import torch.optim as optim
-import plot
+import src.plot as plot
 import time
 from src.interfaces.dataset_models import DataSet
 

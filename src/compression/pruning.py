@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.utils.prune as prune
 import torch_pruning as tp
-import general
+import src.general as general
 from src import plot
 import src.analysis as analysis
 from src.interfaces.dataset_models import DataSet
